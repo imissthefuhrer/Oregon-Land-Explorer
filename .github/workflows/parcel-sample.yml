@@ -30,7 +30,7 @@ jobs:
 
           params = {
               "where": "1=1",
-              "outFields": "OBJECTID,TAXLOT,ACRES",
+              "outFields": "OBJECTID,TAXLOT,ACRES,OWNERNAME",
               "returnGeometry": "true",
               "outSR": "4326",
               "resultRecordCount": "10",
@@ -146,7 +146,10 @@ jobs:
                   const acres = document.createElement("p");
                   acres.textContent = "Acres: " +
                     (p.ACRES ?? "Unknown");
-                  panel.append(heading, acres);
+                  const owner = document.createElement("p");
+owner.textContent = "Owner: " +
+  (p.OWNERNAME ?? "Not available");
+panel.append(heading, acres, owner);
                   polygon.bindPopup(panel);
                 }
               }).addTo(map);
