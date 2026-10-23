@@ -1,0 +1,132 @@
+name: Marion County Parcel Sample
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sample:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Download sample parcels and create preview
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+          from pathlib import Path
+
+          output = Path('output')
+          output.mkdir(exist_ok=True)
+
+          endpoint = (
+              'https://services3.arcgis.com/SXXjryU22GsO8OEC/'
+              'arcgis/rest/services/Parcels/FeatureServer/0/query'
+          )
+          params = {
+              'where': '1=1',
+              'outFields': 'OBJECTID,TAXLOT,ACRES,OWNERNAME',
+              'returnGeometry': 'true',
+              'outSR': '4326',
+              'resultRecordCount': '10',
+              'orderByFields': 'OBJECTID ASC',
+              'f': 'geojson',
+          }
+          url = endpoint + '?' + urllib.parse.urlencode(params)
+          request = urllib.request.Request(
+              url,
+              headers={'User-Agent': 'OregonLandExplorer/0.1 (personal GIS prototype)'},
+          )
+          try:
+              with urllib.request.urlopen(request, timeout=60) as response:
+                  print('Parcel query HTTP status:', response.status)
+                  data = json.load(response)
+          except urllib.error.HTTPError as exc:
+              raise RuntimeError(f'Parcel query HTTP {exc.code}') from exc
+
+          if 'error' in data:
+              raise RuntimeError('ArcGIS error: ' + json.dumps(data['error']))
+          if data.get('type') != 'FeatureCollection':
+              raise RuntimeError('Expected a GeoJSON FeatureCollection')
+          features = data.get('features', [])
+          if not features:
+              raise RuntimeError('Query returned no parcels')
+          if len(features) > 10:
+              raise RuntimeError('Query returned more than the 10 requested parcels')
+          for item in features:
+              geom = item.get('geometry') or {}
+              if geom.get('type') not in ('Polygon', 'MultiPolygon'):
+                  raise RuntimeError('Missing or unexpected parcel polygon geometry')
+          (output / 'parcels.geojson').write_text(
+              json.dumps(data, indent=2), encoding='utf-8'
+          )
+
+          # Prevent data from breaking the inline JavaScript HTML element.
+          embedded_geojson = json.dumps(data).replace('<', '\\u003c')
+          html = r'''<!doctype html>
+          <html lang="en">
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <title>Oregon Land Explorer - Marion County Sample</title>
+            <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+            <style>
+              html, body, #map { width: 100%; height: 100%; margin: 0; }
+              .leaflet-container { background: #e7eddf; }
+              .notice { position: absolute; bottom: 20px; left: 10px; z-index: 1000;
+                        max-width: 320px; background: white; padding: 8px 10px;
+                        border-radius: 5px; font: 12px Arial, sans-serif;
+                        box-shadow: 0 1px 5px #999; }
+            </style>
+          </head>
+          <body>
+            <div id="map"></div>
+            <div class="notice">Marion County test parcels. Boundaries are approximate, not legal surveys. Background is intentionally blank to avoid blocked map tile servers.</div>
+            <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+            <script>
+              const parcels = GEOJSON_PLACEHOLDER;
+              const map = L.map('map');
+              const layer = L.geoJSON(parcels, {
+                style: { color: '#ed8500', weight: 2, fillColor: '#edb262', fillOpacity: 0.24 },
+                onEachFeature: (feature, polygon) => {
+                  const p = feature.properties || {};
+                  const panel = document.createElement('div');
+                  const heading = document.createElement('strong');
+                  heading.textContent = 'Tax lot: ' + (p.TAXLOT ?? 'Unknown');
+                  panel.appendChild(heading);
+                  for (const [label, value] of [
+                    ['Acres', p.ACRES],
+                    ['Owner', p.OWNERNAME]
+                  ]) {
+                    const line = document.createElement('p');
+                    line.textContent = label + ': ' + (value ?? 'Not available');
+                    panel.appendChild(line);
+                  }
+                  polygon.bindPopup(panel);
+                }
+              }).addTo(map);
+              map.fitBounds(layer.getBounds(), { padding: [25, 25] });
+            </script>
+          </body>
+          </html>'''
+          (output / 'map.html').write_text(
+              html.replace('GEOJSON_PLACEHOLDER', embedded_geojson),
+              encoding='utf-8',
+          )
+          populated = sum(bool((f.get('properties') or {}).get('OWNERNAME')) for f in features)
+          print(f'Saved {len(features)} parcels; OWNERNAME populated for {populated}.')
+          print('Saved output/parcels.geojson and output/map.html')
+          PY
+
+      - name: Upload parcel sample and map preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: marion-parcel-sample
+          path: output/
+          retention-days: 30
