@@ -1,0 +1,112 @@
+
+name: Marion County GIS Inspection
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-gis:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Inspect Marion County GIS services
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          import urllib.request
+          import urllib.error
+          from pathlib import Path
+
+          services = {
+              "Parcel FeatureServer":
+                  "https://services3.arcgis.com/SXXjryU22GsO8OEC/arcgis/rest/services/Parcels/FeatureServer/0?f=pjson",
+              "County Parcel MapServer":
+                  "https://gis.co.marion.or.us/arcgis/rest/services/Public/Parcels/MapServer?f=pjson",
+          }
+
+          Path("results").mkdir(exist_ok=True)
+          results = {}
+
+          for name, url in services.items():
+              print(f"\n=== {name} ===", flush=True)
+              result = {"url": url}
+
+              try:
+                  request = urllib.request.Request(
+                      url,
+                      headers={"User-Agent": "OregonLandExplorer/0.1"}
+                  )
+                  with urllib.request.urlopen(
+                      request, timeout=25
+                  ) as response:
+                      result["http_status"] = response.status
+                      data = json.load(response)
+
+                  if "error" in data:
+                      result["arcgis_error"] = data["error"]
+                  else:
+                      result["layer_name"] = data.get("name")
+                      result["geometry_type"] = data.get(
+                          "geometryType"
+                      )
+                      result["capabilities"] = data.get(
+                          "capabilities"
+                      )
+                      result["max_record_count"] = data.get(
+                          "maxRecordCount"
+                      )
+                      result["fields"] = [
+                          field["name"]
+                          for field in data.get("fields", [])
+                      ]
+                      result["layers"] = data.get("layers", [])
+
+              except urllib.error.HTTPError as error:
+                  result["http_status"] = error.code
+                  result["error"] = str(error)
+              except Exception as error:
+                  result["error"] = str(error)
+
+              results[name] = result
+              print(json.dumps(result, indent=2), flush=True)
+
+          Path("results/gis-report.json").write_text(
+              json.dumps(results, indent=2),
+              encoding="utf-8"
+          )
+
+          with open("results/summary.md", "w") as output:
+              output.write("# Marion County GIS Inspection\n\n")
+              for name, result in results.items():
+                  output.write(f"## {name}\n\n")
+                  output.write(
+                      f"HTTP status: {result.get('http_status', 'N/A')}\n\n"
+                  )
+                  output.write(
+                      f"Fields: {', '.join(result.get('fields', []))}\n\n"
+                  )
+                  if result.get("error") or result.get("arcgis_error"):
+                      output.write(
+                          f"Error: {result.get('error', result.get('arcgis_error'))}\n\n"
+                      )
+
+          import os
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary_path:
+              with open(summary_path, "a") as summary:
+                  summary.write(
+                      Path("results/summary.md").read_text()
+                  )
+          PY
+
+      - name: Upload GIS inspection report
+        uses: actions/upload-artifact@v4
+        with:
+          name: marion-gis-report
+          path: results/
+          retention-days: 30
