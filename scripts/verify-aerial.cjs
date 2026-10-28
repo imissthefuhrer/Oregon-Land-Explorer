@@ -86,6 +86,12 @@ const server = http.createServer((req, res) => {
     await page.waitForTimeout(400);
     fs.mkdirSync('work',{recursive:true});
     await page.screenshot({path:'work/aerial-preview.png'});
+    // A compact copy in a collapsed log group also permits visual review by
+    // clients that can read job logs but cannot open binary artifact downloads.
+    const thumbnail=await page.screenshot({type:'jpeg',quality:60});
+    console.log('::group::Rendered preview thumbnail (base64 JPEG)');
+    console.log('AERIAL_SCREENSHOT_DATA_URL=data:image/jpeg;base64,'+thumbnail.toString('base64'));
+    console.log('::endgroup::');
     assert(decoded>0 && report.imageryResponses.some(r=>r.status===200&&/^image\//.test(r.type)),
       'INCOMPLETE: no actual imagery response decoded; do not claim aerial rendering works.');
     report.liveImagery='PASS';

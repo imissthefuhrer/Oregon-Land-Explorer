@@ -42,6 +42,8 @@ def request(label, url):
     if 'json' in (result.get('content_type') or '') or body.lstrip().startswith(b'{'):
         try:
             data = json.loads(body)
+            if label.startswith('export-'):
+                result['json_response'] = data
             if 'error' in data:
                 result['arcgis_error'] = data['error']
         except (ValueError, TypeError) as error:
@@ -112,7 +114,26 @@ def check():
                         ('export-corrected', (xmin, ymin, xmax, ymax))]:
         params = {'bbox': ','.join(map(str, bbox)), 'bboxSR': 3857, 'imageSR': 3857,
                   'size': '512,512', 'format': 'jpgpng', 'f': 'json'}
-        request(label, SERVICE + '/exportImage?' + urllib.parse.urlencode(params))
+        status, body = request(label, SERVICE + '/exportImage?' + urllib.parse.urlencode(params))
+        href = (status.get('json_response') or {}).get('href')
+        if href:
+            if urllib.parse.urlparse(href).hostname != urllib.parse.urlparse(SERVICE).hostname:
+                status['export_image_error'] = 'Unexpected image host; image not fetched'
+                continue
+            image_status, image_body = request(label + '-image', href)
+            try:
+                if not image_body:
+                    raise RuntimeError('Exported image request failed')
+                with Image.open(io.BytesIO(image_body)) as image:
+                    image.load()
+                    image_status['image_size'] = list(image.size)
+                    image_status['channel_variance'] = ImageStat.Stat(image.convert('RGB')).var
+                    image_status['nonblank'] = max(image_status['channel_variance']) >= 1
+                    image.save(out / (label + '.png'))
+                print('Decoded export:', json.dumps(image_status), flush=True)
+            except Exception as error:
+                image_status['decode_error'] = str(error)
+                print('Export decode error:', str(error), flush=True)
 
 
 try:
