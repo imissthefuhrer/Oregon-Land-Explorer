@@ -1,0 +1,74 @@
+name: OSIP Aerial Imagery Live Checks
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/parcel-sample.yml'
+      - '.github/workflows/aerial-imagery-check.yml'
+      - 'scripts/check-osip.py'
+      - 'scripts/verify-aerial.cjs'
+      - 'docs/osip-2024-tile-scheme.json'
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    uses: ./.github/workflows/parcel-sample.yml
+
+  verify:
+    needs: preview
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: marion-parcel-sample
+          path: preview/
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install image check dependency
+        run: python -m pip install --disable-pip-version-check Pillow==11.3.0
+      - name: Check live metadata, tiles, and export errors
+        run: python scripts/check-osip.py preview/parcels.geojson
+      - name: Install browser check dependencies
+        id: browser-dependencies
+        if: ${{ !cancelled() }}
+        run: |
+          npm install --no-save --package-lock=false playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Verify actual rendered imagery and parcel popups
+        if: ${{ !cancelled() && steps.browser-dependencies.outcome == 'success' }}
+        run: node scripts/verify-aerial.cjs preview/map.html preview/parcels.geojson
+      - name: Add browser result to run summary
+        if: ${{ !cancelled() }}
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          report = Path('work/aerial-verification.json')
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              summary.write('\n## Browser verification\n\n')
+              if report.exists():
+                  data = json.loads(report.read_text())
+                  for key in ('parcelsAndPopups', 'pointerClick', 'cacheGrid', 'decodedImageryTiles', 'failureAndRetry', 'liveImagery', 'result'):
+                      if key in data:
+                          summary.write(f'- {key}: {data[key]}\n')
+              else:
+                  summary.write('Browser report missing; verification did not complete.\n')
+          PY
+      - name: Upload HTML, imagery responses, logs and browser screenshot
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: osip-aerial-diagnostics
+          path: |
+            preview/
+            work/
+          retention-days: 14
