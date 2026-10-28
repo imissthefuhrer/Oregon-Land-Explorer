@@ -1,8 +1,13 @@
 # Oregon 2024 aerial basemap diagnosis
 
-Status on 2026-10-28: the cached-grid integration and standalone HTML are implemented;
-parcel interactions and error reporting are browser-tested. **Live aerial rendering
-is still unverified because this environment denies the imagery host.**
+Status on 2026-10-28: **verified on a GitHub-hosted runner**. Metadata and
+three nonblank sample tiles returned HTTP 200. Chromium decoded 20 aerial tiles,
+reported zero JavaScript/network errors, and passed parcel interactions. The
+rendered screenshot was visually inspected: imagery is visible, tile boundaries
+are seamless, and parcel polygons follow the mapped fields and river bend.
+
+[Successful live run and downloadable HTML/diagnostics](https://github.com/imissthefuhrer/Oregon-Land-Explorer/actions/runs/40737445224)
+(source commit `979200c5fb3235bab55dbfd504c98d928b3e8d34`).
 
 ## Findings
 
@@ -26,7 +31,7 @@ was successfully read through the web connector. Its inspected grid is recorded 
 `L.esri.imageMapLayer` requests `exportImage`; it does not consume this tile cache.
 Caching alone does not make dynamic image export inappropriate: the service also
 advertises the Image capability. However, the pinned Esri Leaflet 3.0.19 generated
-this invalid export bbox in Chromium:
+this reversed export bbox in Chromium:
 
 ```text
 xmin=-13691371.842555165
@@ -38,11 +43,21 @@ ymax=5663286.308048458
 Here `ymin > ymax`. The pinned version's
 [`RasterLayer._calculateBbox` source](https://cdn.jsdelivr.net/npm/esri-leaflet@3.0.19/src/Layers/RasterLayer.js)
 uses pixel-style `Bounds.getBottomLeft()`/`getTopRight()` on projected Cartesian
-coordinates, producing that reversed Y order. This is a client-side defect; the
-origin server's response to it could not be inspected through the denied network.
-Do not infer that every ImageServer or every Esri Leaflet version requires tiles.
+coordinates, producing that reversed Y order. **Live testing shows this server
+normalizes the bbox:** both the reversed and correctly ordered requests returned
+HTTP 200 JSON responses, and both referenced images returned HTTP 200 and decoded
+as nonblank 512 × 512 JPEGs. The returned extents and image statistics were equal.
+Therefore the reversal is not established as the cause of the blank map, and
+`imageMapLayer` is compatible with the tested service. Cached tiles are a working
+choice here, not a requirement imposed by lack of dynamic export support.
 
-The fix chooses the published cached tiles, avoiding that export path. A plain
+The reproducible failures in this Codex environment were access failures: the
+original library CDN was denied, causing `L is not defined`, and the imagery host
+was denied at the proxy. The unavailable standalone HTML prevents attributing its
+exact failure to one code path. The service itself responds correctly from the
+GitHub-hosted runner. Do not label it broken based on the local proxy failures.
+
+The fix chooses the published cached tiles, using its prebuilt images directly. A plain
 Leaflet `{z}/{y}/{x}` URL on the default CRS would also be wrong: EPSG:3857 does not
 guarantee a standard tile matrix. The map retains the EPSG:3857 projection, but uses
 the service origin in its pixel transformation and exact LOD resolutions for scale.
@@ -78,19 +93,22 @@ request link, and retry are visible without removing parcels or ownership popups
 | Tile grid | Independent projection/formula checks at levels 1, 10, 13, 16, 18, 19; scale inversion checked at fractional zoom |
 | Actual generated tile URLs | Correct `/tile/level/row/column` order, including the nonstandard rows |
 | Failure/retry | Visible error, request link and retry; retry issues fresh tile requests |
-| Actual imagery response/rendering | **BLOCKED: zero decoded imagery tiles** |
+| Live metadata | HTTP 200; exact grid matches the inspected snapshot |
+| Live sample tiles at levels 13, 15, 19 | Each HTTP 200 `image/jpeg`; 256 × 256; nonuniform pixel values |
+| Original-reversed and corrected export requests | Both HTTP 200 JSON; referenced images HTTP 200, nonblank 512 × 512 JPEGs |
+| Live Chromium imagery rendering | **PASS: 20 decoded tiles; zero JavaScript/network errors** |
+| Rendered screenshot | Visually reviewed with aerial imagery and aligned parcel boundaries |
 
-Direct HTTPS requests through the managed proxy receive **HTTP 403 at CONNECT**
+Local HTTPS requests through the managed proxy receive **HTTP 403 at CONNECT**
 for `imagery.oregonexplorer.info`, which is absent from its network allowlist.
 That 403 comes from the environment, not from ArcGIS. The browser likewise fails
 the tunnel before receiving an imagery HTTP response. No CORS conclusion can be
 drawn from this failure. TLS verification has not been disabled.
 
-## Finish live verification
+## Repeat verification
 
-Allow `imagery.oregonexplorer.info` in the environment's network settings. Then
-check the actual HTTP status, content type, image decode and screenshot, including
-zooming/panning. Example tile requested by this parcel view:
+No Codex environment changes are required to use the GitHub-hosted checks.
+Example tile requested by this parcel view:
 
 ```text
 https://imagery.oregonexplorer.info/arcgis/rest/services/OSIP_2024/OSIP_2024_WM/ImageServer/tile/15/20094/5191
@@ -111,6 +129,8 @@ summary reports results; the `osip-aerial-diagnostics` artifact includes HTML,
 GeoJSON, service responses, decoded tile samples, browser network logs and a
 screenshot. Export probes are informational because the preview uses cached tiles.
 A failed service check does not skip browser diagnostics or artifact upload.
+The preview artifact contains `map.html` and `parcels.geojson`; the diagnostics
+artifact includes the screenshot as `work/aerial-preview.png`.
 
 For repeatable Chromium checks:
 
@@ -122,6 +142,5 @@ node scripts/verify-aerial.cjs path/to/map.html path/to/parcels.geojson
 
 Use `CHROMIUM_EXECUTABLE=/usr/bin/chromium` when Chromium is already installed.
 The verifier writes diagnostics and a screenshot under `work/` and exits with a
-failure unless an actual HTTP 200 image response is decoded by the browser. Its
-current failure is intentional evidence of incomplete live verification, not a
-passing aerial-rendering test. No synthetic imagery was used to claim success.
+failure unless an actual HTTP 200 image response is decoded by the browser. It still fails in the locally restricted Codex environment; it passed on the
+GitHub-hosted runner. No synthetic imagery was used to claim success.
