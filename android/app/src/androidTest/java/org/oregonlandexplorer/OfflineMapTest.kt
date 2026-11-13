@@ -16,7 +16,6 @@ import org.junit.runner.RunWith
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.style.layers.PropertyFactory.visibility
-import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
@@ -27,6 +26,7 @@ class OfflineMapTest {
         val context=instrumentation.targetContext
         assertEquals(PackageManager.PERMISSION_DENIED, context.checkSelfPermission(Manifest.permission.INTERNET))
         val device=UiDevice.getInstance(instrumentation)
+        device.executeShellCommand("mkdir -p /sdcard/Download/ole-evidence")
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             var ready=false
             val deadline=System.currentTimeMillis()+60000
@@ -46,11 +46,11 @@ class OfflineMapTest {
                 val unique=HashSet<Int>()
                 for(x in bitmap.width/4 until bitmap.width*3/4 step 3) for(y in bitmap.height/4 until bitmap.height*3/4 step 3) unique.add(bitmap.getPixel(x,y))
                 colors=unique.size
-                File(context.getExternalFilesDir(null),"offline-aerial.png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it) }
                 latch.countDown()
             } }
             assertTrue("Snapshot timed out",latch.await(20,TimeUnit.SECONDS))
             assertTrue("Expected photographic detail, found only $colors colors", colors>200)
+            device.executeShellCommand("screencap -p /sdcard/Download/ole-evidence/offline-aerial.png")
             var expectedTaxlot=""
             var expectedOwner=""
             var clickX=0
@@ -76,7 +76,7 @@ class OfflineMapTest {
             onView(withText(containsString("Tax lot: $expectedTaxlot"))).check(matches(isDisplayed()))
             onView(withText(containsString("Owner: $expectedOwner"))).check(matches(isDisplayed()))
             onView(withText(containsString("Legal public access: Unknown"))).check(matches(isDisplayed()))
-            device.takeScreenshot(File(context.getExternalFilesDir(null),"offline-parcel.png"))
+            device.executeShellCommand("screencap -p /sdcard/Download/ole-evidence/offline-parcel.png")
             device.pressBack()
             scenario.onActivity { it.map!!.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(44.9,-123.2),15.0)) }
             Thread.sleep(1500)
