@@ -2,6 +2,8 @@ package org.oregonlandexplorer
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -27,6 +29,17 @@ class OfflineMapTest {
         assertEquals(PackageManager.PERMISSION_DENIED, context.checkSelfPermission(Manifest.permission.INTERNET))
         val device=UiDevice.getInstance(instrumentation)
         device.executeShellCommand("mkdir -p /sdcard/Download/ole-evidence")
+        // UTP can restore networking while preparing/installing APKs. Disable it HERE,
+        // immediately before the cold launch, rather than trusting pre-Gradle shell state.
+        device.executeShellCommand("cmd connectivity airplane-mode enable")
+        device.executeShellCommand("svc wifi disable")
+        device.executeShellCommand("svc data disable")
+        assertEquals("1", device.executeShellCommand("settings get global airplane_mode_on").trim())
+        val connectivity=context.getSystemService(ConnectivityManager::class.java)
+        fun connected()=connectivity.getNetworkCapabilities(connectivity.activeNetwork)?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)==true
+        val offlineDeadline=System.currentTimeMillis()+15000
+        while(connected() && System.currentTimeMillis()<offlineDeadline) Thread.sleep(250)
+        assertFalse("Emulator retained validated connectivity",connected())
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             var ready=false
             val deadline=System.currentTimeMillis()+60000
@@ -35,6 +48,7 @@ class OfflineMapTest {
                 Thread.sleep(250)
             }
             assertTrue("Local style did not load",ready)
+            onView(withText(containsString("Offline ·"))).check(matches(isDisplayed()))
             // Native snapshot must contain actual photographic detail, not just orange polygons.
             scenario.onActivity { activity ->
                 for(name in listOf("parcel-fill","parcel-line")) activity.map!!.style!!.getLayer(name)!!.setProperties(visibility("none"))
@@ -57,6 +71,10 @@ class OfflineMapTest {
             var clickY=0
             scenario.onActivity { activity ->
                 for(name in listOf("parcel-fill","parcel-line")) activity.map!!.style!!.getLayer(name)!!.setProperties(visibility("visible"))
+            }
+            Thread.sleep(1500)
+            device.executeShellCommand("screencap -p /sdcard/Download/ole-evidence/offline-boundaries.png")
+            scenario.onActivity { activity ->
                 val test=activity.region!!.manifest.getJSONObject("selection_test")
                 val feature=activity.region!!.parcels.features()!!.first { it.getNumberProperty("OBJECTID").toLong()==test.getLong("id") }
                 expectedTaxlot=feature.getStringProperty("TAXLOT")
