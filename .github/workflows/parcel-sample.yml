@@ -3,6 +3,9 @@ name: Marion County Parcel Sample
 on:
   workflow_dispatch:
   workflow_call:
+  pull_request:
+    paths:
+      - '.github/workflows/parcel-sample.yml'
 
 permissions:
   contents: read
@@ -79,6 +82,100 @@ jobs:
 
           # Prevent data from breaking the inline JavaScript HTML element.
           embedded_geojson = json.dumps(data).replace('<', '\\u003c')
+
+          # Bundle a single aerial photograph in the HTML so the viewer does
+          # not have to contact the OSIP imagery server at all.
+          import math
+          import base64
+          RADIUS = 6378137.0
+
+          def positions(nested):
+              if isinstance(nested, list):
+                  if len(nested) >= 2 and all(isinstance(v, (int, float)) for v in nested[:2]):
+                      yield nested[0], nested[1]
+                  else:
+                      for child in nested:
+                          yield from positions(child)
+
+          def forward(lon, lat):
+              lat = max(-85.05112878, min(85.05112878, lat))
+              return (
+                  RADIUS * math.radians(lon),
+                  RADIUS * math.log(math.tan(math.pi / 4 + math.radians(lat) / 2)),
+              )
+
+          def inverse(x, y):
+              return (
+                  math.degrees(x / RADIUS),
+                  math.degrees(2 * math.atan(math.exp(y / RADIUS)) - math.pi / 2),
+              )
+
+          pts = []
+          for feature in features:
+              pts.extend(positions((feature.get('geometry') or {}).get('coordinates', [])))
+          if not pts:
+              raise RuntimeError('No parcel coordinates for aerial extent')
+          projected = [forward(lon, lat) for lon, lat in pts]
+          x_values, y_values = zip(*projected)
+          x_span = max(x_values) - min(x_values)
+          y_span = max(y_values) - min(y_values)
+          x_pad = max(150, x_span * 0.08)
+          y_pad = max(150, y_span * 0.08)
+          x_min, x_max = min(x_values) - x_pad, max(x_values) + x_pad
+          y_min, y_max = min(y_values) - y_pad, max(y_values) + y_pad
+          longest = max(x_max - x_min, y_max - y_min)
+          image_width = max(256, round(3072 * (x_max - x_min) / longest))
+          image_height = max(256, round(3072 * (y_max - y_min) / longest))
+          mercator_bbox = ','.join(f'{v:.3f}' for v in (x_min, y_min, x_max, y_max))
+          aerial_url = (
+              'https://imagery.oregonexplorer.info/arcgis/rest/services/'
+              'OSIP_2024/OSIP_2024_WM/ImageServer/exportImage'
+          )
+          aerial_query = urllib.parse.urlencode({
+              'bbox': mercator_bbox,
+              'bboxSR': 3857,
+              'imageSR': 3857,
+              'size': f'{image_width},{image_height}',
+              'format': 'jpg',
+              'f': 'image',
+          })
+          print('Requesting OSIP offline aerial:', image_width, image_height, mercator_bbox)
+          try:
+              aerial_request = urllib.request.Request(
+                  aerial_url + '?' + aerial_query,
+                  headers={'User-Agent': 'OregonLandExplorer/0.2 (offline sample)'},
+              )
+              with urllib.request.urlopen(aerial_request, timeout=120) as response:
+                  aerial_bytes = response.read()
+                  print('OSIP aerial response:', response.status, len(aerial_bytes), 'bytes')
+          except urllib.error.HTTPError as exc:
+              raise RuntimeError(f'OSIP aerial export HTTP {exc.code}') from exc
+          if len(aerial_bytes) < 10000 or not aerial_bytes.startswith(b'\xff\xd8\xff'):
+              raise RuntimeError('OSIP did not return a nonempty JPEG: ' +
+                                 aerial_bytes[:200].decode('utf-8', errors='replace'))
+          aerial_base64 = base64.b64encode(aerial_bytes).decode('ascii')
+          south_west = inverse(x_min, y_min)
+          north_east = inverse(x_max, y_max)
+          # Leaflet's imageOverlay expects [latitude, longitude] corners.
+          aerial_bounds = json.dumps([
+              [south_west[1], south_west[0]],
+              [north_east[1], north_east[0]],
+          ])
+          (output / 'aerial.jpg').write_bytes(aerial_bytes)
+
+          # Ensure the layer-control icon is also self-contained.
+          for icon_name in ('layers.png', 'layers-2x.png'):
+              token = 'images/' + icon_name
+              if token in assets['leaflet.css']:
+                  icon_url = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/' + token
+                  with urllib.request.urlopen(icon_url, timeout=30) as response:
+                      encoded = base64.b64encode(response.read()).decode('ascii')
+                  for old in ('url(' + token + ')', 'url("' + token + '")',
+                              "url('" + token + "')"):
+                      assets['leaflet.css'] = assets['leaflet.css'].replace(
+                          old, 'url(data:image/png;base64,' + encoded + ')'
+                      )
+
           html = r'''<!doctype html>
           <html lang="en">
           <head>
@@ -110,96 +207,33 @@ jobs:
               <button id="retry-imagery" type="button" hidden>Retry imagery</button>
               <a id="failed-request" target="_blank" rel="noopener" hidden>Open failed tile request</a>
             </div>
-            <div class="notice">2024 Oregon aerial imagery (OSIP). Parcel boundaries are approximate, not legal surveys. Aerial imagery requires internet access. Owner information reflects assessor records and may be outdated.</div>
+            <div class="notice">2024 Oregon aerial imagery (OSIP). Parcel boundaries are approximate, not legal surveys. This map contains an offline copy of aerial imagery. Owner information reflects assessor records and may be outdated.</div>
             <script>LEAFLET_JS_PLACEHOLDER</script>
             <script>
               if (window.L) {
               const parcels = GEOJSON_PLACEHOLDER;
-              // Exact cache grid from ImageServer?f=pjson, inspected 2026-10-28.
-              // Web Mercator projection does NOT imply the usual XYZ origin or resolutions.
-              const osipTileInfo = {"rows":256,"cols":256,"dpi":96,"format":"MIXED","compressionQuality":75,"origin":{"x":-20037700,"y":30241100},"spatialReference":{"wkid":102100,"latestWkid":3857},"lods":[{"level":0,"resolution":156543.03403606807,"scale":591657528},{"level":1,"resolution":78271.51701803404,"scale":295828764},{"level":2,"resolution":39135.75850901702,"scale":147914382},{"level":3,"resolution":19567.87925450851,"scale":73957191},{"level":4,"resolution":9783.939494962324,"scale":36978595},{"level":5,"resolution":4891.969879773093,"scale":18489298},{"level":6,"resolution":2445.9849398865467,"scale":9244649},{"level":7,"resolution":1222.992337651342,"scale":4622324},{"level":8,"resolution":611.496168825671,"scale":2311162},{"level":9,"resolution":305.7480844128355,"scale":1155581},{"level":10,"resolution":152.874174498349,"scale":577791},{"level":11,"resolution":76.43695495724326,"scale":288895},{"level":12,"resolution":38.218609770552874,"scale":144448},{"level":13,"resolution":19.109304885276437,"scale":72224},{"level":14,"resolution":9.554652442638218,"scale":36112},{"level":15,"resolution":4.777326221319109,"scale":18056},{"level":16,"resolution":2.3886631106595546,"scale":9028},{"level":17,"resolution":1.1943315553297773,"scale":4514},{"level":18,"resolution":0.5971657776648887,"scale":2257},{"level":19,"resolution":0.2984505969011938,"scale":1128},{"level":20,"resolution":0.1492252984505969,"scale":564},{"level":21,"resolution":0.07461264922529845,"scale":282}]};
-              const resolutions = osipTileInfo.lods.map(lod => lod.resolution);
-              const osipCRS = L.extend({}, L.CRS.EPSG3857, {
-                transformation: new L.Transformation(1, -osipTileInfo.origin.x, -1, osipTileInfo.origin.y),
-                scale(zoom) {
-                  const index = Math.max(0, Math.min(resolutions.length - 2, Math.floor(zoom)));
-                  return 1 / (resolutions[index] *
-                    Math.pow(resolutions[index + 1] / resolutions[index], zoom - index));
-                },
-                zoom(scale) {
-                  const resolution = 1 / scale;
-                  let index = 0;
-                  while (index < resolutions.length - 2 && resolution < resolutions[index + 1]) index++;
-                  return index + Math.log(resolution / resolutions[index]) /
-                    Math.log(resolutions[index + 1] / resolutions[index]);
-                }
-              });
-              // Projection/unprojection remains EPSG:3857; GeoJSON stays in longitude/latitude.
-              // Limit to the service's advertised visible scales (levels 1 through 19).
-              const map = L.map('map', { crs: osipCRS, minZoom: 1, maxZoom: 19 });
-              const imageryService = 'https://imagery.oregonexplorer.info/arcgis/rest/services/OSIP_2024/OSIP_2024_WM/ImageServer';
-              console.info('OSIP cached imagery grid:', { service: imageryService, tileInfo: osipTileInfo });
-              const aerial = L.tileLayer(imageryService + '/tile/{z}/{y}/{x}', {
-                tileSize: osipTileInfo.cols,
-                minZoom: 1,
-                maxZoom: 19,
-                maxNativeZoom: 19,
-                noWrap: true,
-                bounds: L.latLngBounds(
-                  L.CRS.EPSG3857.unproject(L.point(-13873495.477400001, 5156077.378400001)),
-                  L.CRS.EPSG3857.unproject(L.point(-12961451.276600001, 5835826.7936))
-                ),
-                attribution: 'Oregon Statewide Imagery Program (OSIP), 2024'
-              });
+              // Bundled OSIP 2024 raster: no live tile requests in the browser.
+              // The server export uses EPSG:3857, matching Leaflet's default CRS.
+              const map = L.map('map');
+              const aerial = L.imageOverlay(
+                'data:image/jpeg;base64,AERIAL_BASE64_PLACEHOLDER',
+                AERIAL_BOUNDS_PLACEHOLDER,
+                {attribution:'Oregon Statewide Imagery Program (OSIP), 2024'}
+              );
+
               const imageryStatus = document.getElementById('imagery-status');
               const imageryMessage = document.getElementById('imagery-message');
               const retryImagery = document.getElementById('retry-imagery');
               const failedRequest = document.getElementById('failed-request');
-              let imageryTimer;
-              let loadedTiles = 0;
-              let failedTiles = 0;
-              function reportImagery(message, state, url) {
+              function reportImagery(message, state) {
                 imageryMessage.textContent = message;
                 imageryStatus.dataset.state = state;
-                retryImagery.hidden = state !== 'error';
-                failedRequest.hidden = !url;
-                if (url) failedRequest.href = url;
-                else failedRequest.removeAttribute('href');
+                retryImagery.hidden = true;
+                failedRequest.hidden = true;
               }
-              function imageryTimedOut() {
-                reportImagery('Aerial imagery is taking too long to load. Parcels remain available. Check your connection or retry.', 'error');
-                console.error('OSIP imagery timed out:', imageryService);
-              }
-              function beginImageryLoad() {
-                clearTimeout(imageryTimer);
-                loadedTiles = 0;
-                failedTiles = 0;
-                reportImagery('Loading Oregon 2024 aerial imagery…', 'loading');
-                imageryTimer = setTimeout(imageryTimedOut, 15000);
-              }
-              aerial.on('loading', beginImageryLoad);
-              aerial.on('tileload', () => { loadedTiles++; });
-              aerial.on('tileerror', event => {
-                failedTiles++;
-                const url = event.tile.src;
-                reportImagery('Aerial imagery could not fully load. Parcels remain available. Check network access to imagery.oregonexplorer.info and retry.', 'error', url);
-                console.error('OSIP tile failed:', { url, coords: event.coords, error: event.error });
-              });
-              aerial.on('load', () => {
-                console.info('OSIP imagery batch:', { loadedTiles, failedTiles });
-                clearTimeout(imageryTimer);
-                if (failedTiles) return; // Keep the error visible even when other tiles succeed.
-                reportImagery(loadedTiles ? 'Oregon 2024 aerial imagery loaded.' :
-                  'No imagery tiles in this view. Pan back to Oregon.', loadedTiles ? 'ready' : 'idle');
-              });
-              aerial.on('remove', () => {
-                clearTimeout(imageryTimer);
-                reportImagery('Aerial imagery is turned off.', 'idle');
-              });
-              retryImagery.addEventListener('click', () => {
-                beginImageryLoad();
-                aerial.redraw();
-              });
+              aerial.on('load', () => reportImagery('Offline Oregon 2024 aerial image loaded.', 'ready'));
+              aerial.on('error', () => reportImagery('Embedded aerial image could not be decoded.', 'error'));
+
               // Register handlers before adding the layer; parcel rendering is independent.
               const layer = L.geoJSON(parcels, {
                 style: { color: '#ed8500', weight: 2, fillColor: '#edb262', fillOpacity: 0.24 },
@@ -229,6 +263,8 @@ jobs:
           </html>'''
           (output / 'map.html').write_text(
               html.replace('GEOJSON_PLACEHOLDER', embedded_geojson)
+                  .replace('AERIAL_BASE64_PLACEHOLDER', aerial_base64)
+                  .replace('AERIAL_BOUNDS_PLACEHOLDER', aerial_bounds)
                   .replace('LEAFLET_CSS_PLACEHOLDER', assets['leaflet.css'])
                   .replace('LEAFLET_JS_PLACEHOLDER', assets['leaflet.js'])
                   .replace('LEAFLET_LICENSE_PLACEHOLDER', assets['LICENSE']),
@@ -236,7 +272,7 @@ jobs:
           )
           populated = sum(bool((f.get('properties') or {}).get('OWNERNAME')) for f in features)
           print(f'Saved {len(features)} parcels; OWNERNAME populated for {populated}.')
-          print('Saved output/parcels.geojson and output/map.html')
+          print('Saved output/parcels.geojson, output/aerial.jpg and offline output/map.html')
           PY
 
       - name: Upload parcel sample and map preview
