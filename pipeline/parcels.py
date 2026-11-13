@@ -40,8 +40,10 @@ def extract(bounds, limit, request=get_json):
             geometry = shape(feature['geometry'])
             if geometry.geom_type not in ('Polygon', 'MultiPolygon') or geometry.is_empty or not geometry.is_valid:
                 raise ValueError(f'Invalid polygon for OBJECTID {feature["properties"]["OBJECTID"]}; no silent geometry repair')
-            if not geometry.intersects(box(*bounds)):
-                raise ValueError('Returned parcel does not intersect requested region')
+            intersects = geometry.intersects(box(*bounds))
+            if not intersects:
+                print(f'ArcGIS spatial candidate outside exact region: OBJECTID={feature["properties"]["OBJECTID"]}, bounds={geometry.bounds}', flush=True)
+            feature['properties']['intersects_region'] = intersects
             audit[str(feature['properties']['OBJECTID'])] = fingerprint(feature)
             feature['id'] = feature['properties']['OBJECTID']
             # No name-based guesses about public ownership or legal access.

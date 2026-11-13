@@ -47,7 +47,9 @@ JDK 17, Gradle 8.11.1, AGP 8.9.2, Kotlin 2.1.20 and MapLibre Native 12.0.1.
 
 The parcel query first obtains all intersecting IDs and a separate count, uses
 100-ID batches, reconciles each batch exactly, rejects invalid geometries, and
-checks the ID set again after extraction. It retains null attributes and never
+checks the ID set again after extraction. ArcGIS spatial candidates whose returned
+geometry does not intersect the exact WGS84 region are explicitly recorded in the
+manifest and retained, so no source-selected record is silently dropped. It retains null attributes and never
 joins owner names to polygons by list position. Per-record fingerprints bind
 source geometry to OBJECTID, TAXLOT, ACRES and OWNERNAME. This detects accidental
 packaging swaps; it cannot establish the underlying assessor record's correctness.

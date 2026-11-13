@@ -20,12 +20,14 @@ const assert=require('node:assert/strict');
     assert(await page.locator('.leaflet-image-layer').evaluate(i=>i.complete&&i.naturalWidth>256&&i.src.startsWith('data:image/jpeg;base64,')));
     for(let i=0;i<expected.features.length;i++) {
       await page.evaluate(i=>window.__test.layer.getLayers()[i].openPopup(),i);
-      const text=await page.locator('.leaflet-popup-content').innerText();
+      const text=await page.locator('.leaflet-popup-content').last().innerText();
       for(const k of ['TAXLOT','OWNERNAME','ACRES']) assert(text.includes(String(expected.features[i].properties[k])));
     }
+    await page.evaluate(()=>{window.__test.map.closePopup();window.__test.map.panTo(window.__test.layer.getLayers()[0].getCenter(),{animate:false});});
+    await page.waitForTimeout(500);
     const point=await page.evaluate(()=>{ const {map,layer}=window.__test;map.closePopup();return map.latLngToContainerPoint(layer.getLayers()[0].getCenter()); });
     await page.mouse.click(point.x,point.y);
-    await page.locator('.leaflet-popup-content').waitFor();
+    await page.locator('.leaflet-popup-content').last().waitFor();
     await page.screenshot({path:'work/aerial-preview.png'});
     fs.writeFileSync('work/aerial-verification.json',JSON.stringify({result:'PASS',parcelsAndPopups:expected.features.length,pointerClick:'PASS',offlineEmbeddedImagery:'PASS',externalRequests:'blocked'},null,2));
   } finally { await browser.close(); }

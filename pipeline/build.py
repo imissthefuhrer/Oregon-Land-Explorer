@@ -33,12 +33,15 @@ def main():
     tile_count = imagery.build(output/'aerial.pmtiles', config)
     # A real interior point for repeatable instrumented parcel selection.
     from shapely.geometry import shape
-    center = shape(data['features'][0]['geometry']).representative_point()
+    from shapely.geometry import box
+    test_feature = next(f for f in data['features'] if f['properties']['intersects_region'])
+    center = shape(test_feature['geometry']).intersection(box(*config['bbox'])).representative_point()
     manifest = dict(config, schema_version=1, extracted_at=datetime.now(timezone.utc).isoformat(),
         imagery_year=2024, imagery_source=imagery.SOURCE, parcel_source=parcels.SOURCE,
         parcel_count=len(data['features']), tile_count=tile_count,
+        spatial_candidate_ids_outside_region=[f['id'] for f in data['features'] if not f['properties']['intersects_region']],
         owner_count=sum(bool(f['properties'].get('OWNERNAME')) for f in data['features']),
-        selection_test={'id':data['features'][0]['id'], 'longitude':center.x, 'latitude':center.y},
+        selection_test={'id':test_feature['id'], 'longitude':center.x, 'latitude':center.y},
         legal_access='Unknown', ownership_class='Unknown',
         attribution='Oregon Statewide Imagery Program (OSIP), 2024; Marion County assessor-derived parcels',
         redistribution='Personal test region only; confirm parcel publisher terms before broader redistribution',
