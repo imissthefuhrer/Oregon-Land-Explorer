@@ -1,43 +1,21 @@
-Oregon Land Explorer
+# Oregon Land Explorer
 
-An offline-first Android mapping application for exploring Oregon's public and private lands.
+Native Kotlin / MapLibre Android prototype with a real, locally installed Gervais
+(Marion County) aerial and parcel region. No login, API keys, backend or runtime
+internet permission. GPS uses Android LocationManager, including on microG phones.
 
-Initial development region
+**Build/download:** open this PR's **Offline Android APK** Actions run, then download
+`oregon-land-explorer-debug`. Extract and install `app-debug.apk` on Android 8+.
+Build and emulator pass/fail status must be checked on the actual run; source code
+alone is not proof of a working APK. Physical-device testing remains required.
 
-Marion County, Oregon.
+- [Install, test, architecture and expansion](docs/offline-android.md)
+- [Data-use review and redistribution limits](docs/data-use.md)
+- `pipeline/`: configurable real GIS preparation and validation
+- `regions/`: bounded region definitions
+- `android/`: native Android app and instrumented tests
+- `scripts/build-preview.py`: preserved PR #2 self-contained browser prototype
 
-Planned features
-
-GPS location
-
-Property parcel boundaries
-
-Public and private land identification
-
-Parcel ownership information where legally available
-
-Offline maps
-
-Interactive parcel information
-
-Development approach
-
-GitHub Actions for cloud-based processing and builds
-
-Python for GIS data preparation
-
-Kotlin and MapLibre for Android
-
-Current milestone
-
-Retrieve a small sample of real Marion County parcel boundaries and display them on an interactive map.
-
-Data sources
-
-Marion County ArcGIS assessor map
-
-Marion County GIS parcel services
-
-Oregon public land GIS datasets
-
-Parcel boundaries are approximate and do not establish legal public access.
+Public ownership and legal access are separate. This first build does not install
+a verified public-land classification or legal-access layer; both remain Unknown.
+Generated ownership datasets are not committed to the public repository.

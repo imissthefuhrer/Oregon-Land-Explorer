@@ -8,6 +8,7 @@ on:
       - '.github/workflows/aerial-imagery-check.yml'
       - 'scripts/check-osip.py'
       - 'scripts/verify-aerial.cjs'
+      - 'scripts/build-preview.py'
       - 'docs/osip-2024-tile-scheme.json'
 
 permissions:

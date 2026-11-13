@@ -1,0 +1,4 @@
+Pillow==11.3.0
+shapely==2.1.2
+pmtiles==3.4.1
+pytest==8.4.2
