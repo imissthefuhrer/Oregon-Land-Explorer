@@ -54,3 +54,25 @@ def test_blank_image_fails():
     buf=io.BytesIO(); Image.new('RGB',(256,256),'black').save(buf,format='JPEG')
     with pytest.raises(ValueError,match='Blank'): validate_jpeg(buf.getvalue())
     with pytest.raises(ValueError): validate_jpeg(b'{"error":500}')
+
+
+def test_spatial_candidates_are_reported_not_lost():
+    base,_=service(count=1)
+    def request(url,p):
+        result=base(url,p)
+        if 'features' in result:
+            result['features'][0]['geometry']['coordinates']=[[[2,2],[3,2],[3,3],[2,3],[2,2]]]
+        return result
+    data,audit=extract([0,0,1,1],10,request)
+    assert len(data['features'])==1 and len(audit)==1
+    assert data['features'][0]['properties']['intersects_region'] is False
+
+
+def test_invalid_geometry_fails_without_repair():
+    base,_=service(count=1)
+    def request(url,p):
+        result=base(url,p)
+        if 'features' in result:
+            result['features'][0]['geometry']['coordinates']=[[[0,0],[1,1],[1,0],[0,1],[0,0]]]
+        return result
+    with pytest.raises(ValueError,match='Invalid polygon'): extract([0,0,1,1],10,request)

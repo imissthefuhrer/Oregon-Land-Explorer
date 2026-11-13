@@ -201,7 +201,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
         else locationStatus.text="Location permission denied · map still works offline"
     }
     override fun onStart() { super.onStart(); mapView.onStart(); connectivity.registerDefaultNetworkCallback(networkCallback); networkRegistered=true }
-    override fun onResume() { super.onResume(); mapView.onResume(); if(fix!=null) startGps() }
+    override fun onResume() { super.onResume(); mapView.onResume(); startGps() }
     override fun onPause() { locations.removeUpdates(this); mapView.onPause(); super.onPause() }
     override fun onStop() { if(networkRegistered) { connectivity.unregisterNetworkCallback(networkCallback); networkRegistered=false }; mapView.onStop(); super.onStop() }
     override fun onDestroy() { mapView.onDestroy(); super.onDestroy() }
