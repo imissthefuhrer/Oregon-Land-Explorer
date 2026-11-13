@@ -50,15 +50,16 @@ jobs:
         run: gradle --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug :app:testDebugUnitTest
       - name: Verify actual APK contents and permissions
         run: python scripts/check-apk.py android/app/build/outputs/apk/debug/app-debug.apk
+      - name: Prepare simple download folder
+        run: |
+          mkdir -p output/delivery
+          cp android/app/build/outputs/apk/debug/app-debug.apk output/delivery/
+          cp output/gervais.olepack output/SHA256SUMS.txt output/apk-validation.json output/delivery/
       - name: Upload installable APK and region
         uses: actions/upload-artifact@v4
         with:
           name: oregon-land-explorer-debug
-          path: |
-            android/app/build/outputs/apk/debug/app-debug.apk
-            output/gervais.olepack
-            output/SHA256SUMS.txt
-            output/apk-validation.json
+          path: output/delivery/
           retention-days: 14
           if-no-files-found: error
       - name: Enable emulator acceleration
@@ -80,7 +81,8 @@ jobs:
             adb shell svc data disable
             adb shell settings put global airplane_mode_on 1
             cd android && gradle --no-daemon :app:connectedDebugAndroidTest
-            adb pull /sdcard/Android/data/org.oregonlandexplorer/files ../output/emulator-screenshots
+            mkdir -p "$GITHUB_WORKSPACE/output/emulator-screenshots"
+            adb pull /sdcard/Android/data/org.oregonlandexplorer/files/. "$GITHUB_WORKSPACE/output/emulator-screenshots/"
       - name: Upload test evidence (also on failure)
         if: always()
         uses: actions/upload-artifact@v4
