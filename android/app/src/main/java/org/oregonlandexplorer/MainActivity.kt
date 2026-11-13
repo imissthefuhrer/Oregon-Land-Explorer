@@ -96,6 +96,8 @@ class MainActivity : AppCompatActivity(), LocationListener {
     }
 
     private fun loadMap(installed: Region) {
+        map?.setMinZoomPreference(installed.manifest.getInt("minzoom").toDouble())
+        map?.setMaxZoomPreference((installed.manifest.getInt("maxzoom")+2).toDouble())
         map?.setStyle(Style.Builder().fromJson(installed.style())) { style ->
             style.addSource(GeoJsonSource("parcels", installed.parcels))
             style.addLayer(FillLayer("parcel-fill", "parcels").withProperties(fillColor("#ffb547"), fillOpacity(0.08f)))
@@ -157,11 +159,12 @@ class MainActivity : AppCompatActivity(), LocationListener {
         val target=map?.cameraPosition?.target
         val bounds=map?.projection?.visibleRegion?.latLngBounds
         val installed=region ?: return
+        val regionLabel=installed.manifest.getString("name")
         val fullyInside = bounds != null && installed.contains(bounds.latitudeNorth,bounds.longitudeEast) && installed.contains(bounds.latitudeSouth,bounds.longitudeWest)
         status.text = (if(online) "Online · " else "Offline · ") + when {
             target == null || !installed.contains(target.latitude,target.longitude) -> "Area not downloaded · tap Region"
-            !fullyInside -> "Local Gervais map · view extends beyond download"
-            else -> "Local Gervais map · ready"
+            !fullyInside -> "Local $regionLabel · view extends beyond download"
+            else -> "Local $regionLabel · ready"
         }
     }
     private fun requestGps() {
