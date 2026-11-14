@@ -1,127 +1,133 @@
-# Offline Android prototype
+# Expanded offline Android maps
 
-## Preserved foundation
+This implementation starts at PR #3 commit `384fa25653ce2348589b583e926da7d60ffcabd4`,
+which the user installed and tested on a physical phone. The original branch and
+its APK are preserved. [Prototype architecture/evidence](offline-android-prototype.md).
 
-PR #1 merged as `0ba8aaec`; PR #2 was open/draft at implementation start.
-This branch starts at PR #2 commit `4696b657`. Its exact embedded-image builder
-was moved from YAML into `scripts/build-preview.py`; the HTML output and the
-source query are preserved. The old browser verifier assumed live cached tiles
-and referenced the removed `osipCRS`; it now tests the embedded JPEG with HTTP
-requests blocked. No prototype data has been committed.
+## Android installation and import
 
-## Cloud-only build and install
+1. Open this PR's successful **Offline Android APK** run. Download the
+   **oregon-land-explorer-expanded** artifact while signed into GitHub and extract
+   the ZIP in Android's Files app. Install `app-debug.apk` (Android 8+).
+2. Open **Oregon Land Explorer Expanded**. It installs beside the tested prototype;
+   do not uninstall the original app. Future expanded-app APKs use a persistent
+   signing key held in repository Actions secrets, with a local private backup.
+3. The outdoor corridor and the original 803-parcel Gervais extract are bundled.
+   No additional download is needed to open the continuous road/trail basemap.
+4. For broader property details, choose **Region → Import .olepack from Downloads**
+   and select `gervais-countryside.olepack`. Repeat with `silver-falls.olepack`.
+   The Android document picker also supports other document providers. The app
+   copies files to private storage; Downloads can subsequently be removed.
+5. Optional: import `gervais-original-aerial.olepack`, then select **Region → Show
+   installed optional aerial**. This is the exact verified OSIP 2024 payload,
+   covering only the original small Gervais rectangle. Outdoor maps remain below
+   it. Select **Use outdoor basemap** to switch back. Parcels remain selectable.
+6. **Region → Manage installed packages** enables/disables individual packages,
+   shows their coverage, restores the retained previous version after updates,
+   and deletes downloaded packages after confirmation. Bundled core maps are retained.
+7. Turn on airplane mode. Visit each destination from the Region menu, pan and
+   zoom, and tap property boundaries. GPS requests Android precise-location
+   permission. Use it outdoors to verify your home coverage privately. Neither
+   coordinates nor location history are uploaded or written to repository files.
 
-Open the **Offline Android APK** run on this PR. The pipeline retrieves the small
-Gervais area, validates it, embeds it, builds Kotlin and lint checks, audits the
-APK, and runs Android API 35 instrumentation. No workstation setup is required.
-Download `oregon-land-explorer-debug` from the run's Artifacts section while
-signed into GitHub. Extract the ZIP, open `app-debug.apk` on Android, and allow
-installation from that browser/file manager when prompted. Android 8+ is required;
-the APK includes arm64 (including Pixel 7) and x86_64 (emulator).
-This is a debug-signed personal prototype. A future CI debug keystore may change;
-if Android refuses an update due to signing mismatch, uninstall the prototype
-first (this erases its local data). Establish a private stable signing key before
-saving user-created field data.
+The app has **no INTERNET permission**, server, login, remote styles, sprites or
+font requests. A browser needs connectivity only to download new files. Installed
+regions open without connectivity. `SHA256SUMS.txt` covers distributed archives
+and APK; the importer independently verifies all manifest payload SHA-256 hashes.
+Hashes detect corruption; they do not authenticate an unknown package publisher.
+Import trusted downloads. Raw `.pmtiles` alone are intentionally unsupported:
+wrap them in a versioned `.olepack` with bounds, attribution and checksums.
 
-1. Open the app in airplane mode. Wait for the local Gervais aerial map.
-2. Pan/pinch; tap orange parcels. Confirm owner, tax lot and assessed acreage.
-3. Toggle Parcels; reopen the app offline; try portrait and landscape.
-4. Tap GPS and allow precise location. Outdoors, wait for a satellite fix.
-   The initial fix may take longer without assisted GPS. Approximate-only location
-   may use the Android network provider and is not a reliable offline substitute.
-5. If outside this small region, the app warns that the area isn't downloaded.
-   Tap Region to return. A warning also appears when the visible viewport crosses
-   the configured edge. Parcels at the boundary retain their full source geometry;
-   selection outside the configured region is disabled.
-6. Info shows the extraction timestamp, sources, bounds limitations and attribution.
+## Initial geography
 
-Real GPS, phone GPU behavior, battery use and physical-device usability require
-user testing. A hosted emulator is not evidence of physical-device verification.
+All bounds are WGS84 `[west, south, east, north]`, not home coordinates.
+Edit [regions/corridor.json](../regions/corridor.json) to produce another bounded
+extract using the same hosted workflow. Build configuration is public; private
+home coordinates must never be committed.
 
-## Data pipeline
+| Package | Bounds | Contents |
+|---|---|---|
+| `willamette-silver-outdoors` | `[-123.10,44.80,-122.48,45.25]` | Continuous outdoor basemap, stored zooms 8–15, displayed through 19 |
+| `gervais-countryside` | `[-123.10,45.015,-122.80,45.22]` | Marion parcels around Gervais, St. Louis Ponds and Willamette Mission, including approach roads' surroundings |
+| `silver-falls` | `[-122.76,44.80,-122.48,45.02]` | Marion parcels around Silver Falls grounds and approaches |
+| `gervais-original-parcels` | `[-122.910,45.100,-122.890,45.115]` | Exact PR #3 parcel geometries and owner records; bundled |
+| `gervais-original-aerial` | same original bounds | Optional exact PR #3 aerial pyramid, stored zooms 13–17 |
 
-`python -m pipeline.build --region regions/gervais.json --output output/region`
-Optional `--bbox WEST SOUTH EAST NORTH` overrides the configured region.
-Dependencies are pinned in `pipeline/requirements.txt`. CI uses Python 3.12,
-JDK 17, Gradle 8.11.1, AGP 8.9.2, Kotlin 2.1.20 and MapLibre Native 12.0.1.
+Regional rectangles include complete source-selected taxlots, with a full
+geometry/attribute fingerprint audit. Duplicate Marion OBJECTIDs in overlapping
+packs are resolved in favor of the later extraction, without duplicating popups.
+Basemap and parcel coverage warnings are separate. A vector map outside the
+parcel rectangles does not imply owner information is installed there. The
+Marion source contains no neighboring-county property records, including across
+the Willamette River. Vector coverage extends to both sides of the river.
 
-The parcel query first obtains all intersecting IDs and a separate count, uses
-100-ID batches, reconciles each batch exactly, rejects invalid geometries, and
-checks the ID set again after extraction. ArcGIS spatial candidates whose returned
-geometry does not intersect the exact WGS84 region are explicitly recorded in the
-manifest and retained, so no source-selected record is silently dropped. It retains null attributes and never
-joins owner names to polygons by list position. Per-record fingerprints bind
-source geometry to OBJECTID, TAXLOT, ACRES and OWNERNAME. This detects accidental
-packaging swaps; it cannot establish the underlying assessor record's correctness.
-Source metadata is retained. ArcGIS is not a transactional snapshot: attribute
-changes during extraction remain possible even with a stable ID set.
+## Outdoor map and source limitations
 
-Imagery uses the proven PR #2 `exportImage` service in EPSG:3857. Every requested
-256px image has exact standard XYZ bounds; OSIP's nonstandard cached tile origin
-is NOT treated as XYZ. Zooms 13–17 provide a small multiresolution pyramid. At
-higher display zooms the app magnifies stored pixels; it does not imply new detail.
-Every JPEG is decoded and checked for blankness. Original source URLs and the UTC
-extraction timestamp are in `manifest.json`. A successful image decode alone does
-not prove aerial/parcel geodetic accuracy; inspect alignment on the phone too.
+Geofabrik's official Oregon OSM PBF is downloaded once in hosted CI. Osmium
+extracts a buffered region and completes multipolygons; Tilemaker **v3.2.0**
+compiles the original `oregon-outdoor-v1` Lua profile directly to vector PMTiles.
+No requests are made to OSM's public raster tile servers. The extract SHA-256,
+OSM header timestamp, tool version, bounds and layer counts are retained.
 
-## Package and mapping engine choice
+The style draws roads, forest tracks, hiking paths, cycleways, streams, ponds,
+woodland, park polygons, farms, buildings and labels. Text glyphs ship locally
+(Noto Sans, SIL OFL 1.1; Latin/Greek/Cyrillic and general punctuation ranges).
+Geometry retained at zoom 15 overzooms cleanly for hiking/parcel inspection;
+overzooming adds no new source information. This is an outdoor map, without
+contours, hillshade, turn-by-turn routing or live closure data.
 
-An `.olepack` is a ZIP containing `manifest.json`, `aerial.pmtiles`,
-`parcels.geojson`, `source-record-hashes.json`, and `source-metadata.json`.
-Schema 1 specifies WGS84 GeoJSON and a JPEG PMTiles v3 Web Mercator pyramid.
-Manifest SHA-256 checksums cover payload files. The app copies the bundled region
-to app-private storage and verifies checksums before reading it.
+The validator decodes every generated vector tile, checks continuous tile
+coverage at all stored zooms, and reports feature classes and names at each
+target's surrounding area. Name checks compare selected trail names with OPRD
+maps. An unmatched name may be an unnamed/misspelled path; it is not proof of a
+missing physical trail. Published maps and source geometry need field checks.
 
-MapLibre explicitly documents local PMTiles support since Android 11.7.0:
-https://maplibre.org/maplibre-native/android/examples/data/PMTiles/
-The app reads `pmtiles://file:///.../aerial.pmtiles` directly, with no localhost
-server and no remote style, glyph or sprite dependencies. PMTiles files are
-prepared externally; MapLibre's offline-region download/cache API is not used.
-MBTiles is not assumed to be a drop-in format for that API.
+- [Silver Falls official whole-park map](https://stateparks.oregon.gov/index.cfm?do=main.loadFile&load=_siteFiles%2Fpublications%2F%2F2024-silver-falls-map-board-web.103937.pdf)
+- [Silver Falls Trail of Ten Falls map](https://stateparks.oregon.gov/index.cfm?do=main.loadFile&load=_siteFiles%2Fpublications%2F%2F2025-silver-falls---tenfalls-southdistrict.074640.pdf&pubDate=20250712)
+- [Willamette Mission official map](https://stateparks.oregon.gov/index.cfm?do=main.loadFile&load=_siteFiles%2Fpublications%2FWillamette_Mission_brochure_LOW_RES105832.pdf)
 
-The merged manifest removes INTERNET permission, including library declarations.
-`ACCESS_NETWORK_STATE` only reports connectivity. Android LocationManager provides
-GPS without Google Play Services, login, token or backend.
+Mapped `access=no/private` is shown in purple; other trails use rust dashes,
+tracks use brown dashes. These are source tags, not legal-access determinations.
+Owner names, park shading and a path's presence do not establish permission to
+enter. Ownership classification and legal public access stay **Unknown**.
 
-## Scope of automated evidence
+## Package validation and updates
 
-- Unit tests exercise >1 parcel batch, missing records, safety limits, coordinate
-  grid consistency and blank/error imagery rejection.
-- Package verification checks all expected imagery tiles and geometry/attribute
-  fingerprints and checksums.
-- APK audit reads the actual ZIP payload and uses `aapt` to verify permissions.
-- Instrumentation cold launches with Wi-Fi/mobile data disabled; verifies a native
-  photographic snapshot with parcel layers hidden; physically taps a source
-  polygon's interior point and checks its owner and tax lot; checks outside-area
-  messaging and activity recreation. Screenshots and JUnit/lint reports are artifacts.
-- Passing instrumentation does not validate GPS hardware, offline GNSS acquisition,
-  all permission scenarios, every Android device, or countywide performance.
+Schema 2 ZIPs contain `manifest.json` and a fixed payload set for one kind:
+`basemap.pmtiles` (outdoor vector), `aerial.pmtiles` (optional JPEG) or
+`parcels.geojson` plus source audit/metadata. Schema 1 imports remain supported,
+including the original `.olepack`. Packages cannot supply arbitrary styles,
+remote URLs, fonts or executable code.
 
-## Expansion after device acceptance
+The importer rejects unknown schemas/kinds, invalid IDs/bounds/revisions, duplicate
+or non-root filenames, missing/unlisted payloads, bad hashes, unsupported PMTiles
+headers/types/offsets/zooms, excessive expansion and malformed parcel structures.
+Limits: 8 entries, 512 MiB total expansion, 384 MiB per PMTiles, 64 MiB GeoJSON,
+35,000 parcels and 3 million vertices; manifests are capped at 128 KiB.
+A corrupt archive does not activate. A normal update requires a strictly higher
+revision; identical reimports are harmless. Rollback is an explicit user action.
 
-1. Marion County: partition into bounded independent regions; benchmark archive
-   sizes and native memory; use vector-tiled parcel geometry rather than one huge
-   GeoJSON. Reconcile IDs/counts per partition and use stable identifiers to handle
-   boundary duplicates. Establish restart/resume and source-update detection.
-2. Other counties: introduce explicit adapters for each schema, owner availability,
-   date semantics and use terms. Never infer compatible fields by spelling alone.
-3. Public ownership: add separately attributed BLM surface-management, USFS and
-   Oregon agency ownership layers after checking authoritative metadata and dates.
-   Classifications need source-backed codes. Do not infer public status by owner
-   substring. Legal access requires a separate layer with evidence, restrictions,
-   seasonality and update date; default is Unknown.
-4. Region updates: schema is independent of APK; add Android Storage Access
-   Framework ZIP import, size/path/zip-bomb limits, full validation in staging,
-   atomic activation and rollback. Current app loads the bundled region only;
-   user-facing import/download is NOT implemented in this first milestone.
-5. Terrain: add an appropriately licensed raster PMTiles basemap as a separate
-   optional package, preserving independent attribution and source dates.
-6. Owner search: after permissions review, add a local SQLite/FTS index keyed by
-   stable county parcel ID, with clear missing-name and stale-data behavior.
+Validated versions are immutable. Installation stages and syncs files, renames the
+complete directory, then commits an `AtomicFile` registry. A process interruption
+leaves either the previous or complete new registry. Prior versions remain for
+rollback; installed data are not overwritten by APK assets. Explicit deletion
+removes a downloaded package and its retained versions. No broad storage permission
+is required. Installed checksums are rechecked before maps are loaded.
 
-Do not download statewide maximum resolution. Cap requests and area before any
-larger job. Generated ownership datasets, APKs, packages and source snapshots are
-ignored by Git and delivered only as short-lived Actions artifacts. Because this
-repository is public, its Actions artifacts are not a private distribution channel;
-only this small authorized personal prototype is packaged here. Use private
-artifact distribution for broader owner datasets after rights review.
+## Hosted verification and comparison
+
+The workflow produces APK/packages, `SHA256SUMS.txt`, `storage.json`,
+`vector-validation.json`, `packages-validation.json`, and separate test evidence.
+It builds/lints Android, audits actual APK payloads/permissions, checks every parcel
+source fingerprint and polygon, and runs API 35 instrumentation in airplane mode.
+The emulator tests exercise native rendering, original parcel owner popups,
+Android document import, multiple regions, GPS test-provider recentering,
+optional aerial selection, recreation, checksum/path rejection and update rollback.
+
+`performance.json` compares the original APK and expanded APK on the same emulator:
+three force-stopped activity launches, default-map idle memory, scripted panning
+and Android UI frame statistics. Activity launch time is not completed tile-render
+latency; UI statistics are not a full native map GPU benchmark. Extents differ.
+Physical-phone GPU performance, GNSS acquisition and home coverage still require
+phone verification. The first prototype's physical-phone acceptance does not
+verify this expanded build. Final measured results are recorded separately after CI.

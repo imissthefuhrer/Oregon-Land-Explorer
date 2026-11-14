@@ -40,3 +40,49 @@ redistribution, verify this exact endpoint's publisher, data vintage, current
 county GIS disclaimer and owner-field redistribution conditions with Marion County
 GIS. No contact message has been sent. Only the requested small test is automated;
 configuration safety limits prevent accidental countywide export.
+
+## Expanded regional milestone — 2026-11-13
+
+The requested expansion is two bounded personal-use regional extracts, not a
+countywide ownership export. The exact existing parcel service's ArcGIS item was
+reviewed before expansion:
+https://www.arcgis.com/sharing/rest/content/items/bc90901732a4443bbfa1f949cc9cc205?f=pjson
+It is public, owned by `ikintz_cityofstayton`, credits Marion County Assessor /
+IT-GIS, and carries the county's accuracy/use disclaimer in `licenseInfo`.
+Its item modification date is September 15, 2025; this is **not** proof of the
+underlying tax roll vintage. No new authoritative/live-vintage claim is made.
+The item metadata and layer metadata ship in each parcel package. The county
+policy reviewed above applies to county departments and requires a disclaimer
+for public data access; it does not itself establish a broad owner redistribution
+license. No license is invented from the ability to query a service. Countywide
+or general commercial redistribution remains outside this milestone; seek source
+confirmation before that expansion. The user explicitly requested these bounded
+personal packages, delivered in Actions artifacts; those artifacts are public,
+not private storage. Owner data remain excluded from Git history.
+
+### OpenStreetMap / Geofabrik
+
+Official source: https://download.geofabrik.de/north-america/us/oregon.html
+License and attribution: https://www.openstreetmap.org/copyright
+Full data license: https://opendatacommons.org/licenses/odbl/1-0/
+
+The derived outdoor database is offered under ODbL 1.0 with © OpenStreetMap
+contributors attribution shown continuously on the map, and full source/license
+information in Info and package metadata. The build source and original profile
+are in the repository; the source extract timestamp, SHA-256 and official download
+URL accompany the PMTiles database. Geofabrik bulk `.osm.pbf` is used; OSM's public
+tile servers are never queried. This is independent of the separately sourced
+parcel data. No parcel attributes are inserted into the OSM basemap database.
+
+Tilemaker (https://github.com/systemed/tilemaker) and Planetiler
+(https://github.com/onthegomap/planetiler) both support direct PMTiles output.
+Tilemaker v3.2.0 is selected for a compact custom profile, requiring no global
+coastline/landcover downloads or hosted map backend. Its source is built in CI.
+The Lua profile and style here are original; they are not a copied OSM raster
+style or an OpenMapTiles style. MapLibre Native remains BSD-2-Clause.
+
+Local text fonts are Noto Sans Regular, distributed by the OpenMapTiles fonts
+v2.0 release (https://github.com/openmaptiles/fonts/releases/tag/v2.0), under SIL
+Open Font License 1.1. The font license is included in APK assets. No remote font
+service is used. Uncommon character ranges beyond the bundled set may lack glyphs;
+new source regions should audit their character requirements before distribution.
