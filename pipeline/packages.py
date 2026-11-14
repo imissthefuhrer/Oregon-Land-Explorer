@@ -29,7 +29,7 @@ def finish(root, config, kind, **extra):
 def build_parcels(config, output):
     root = Path(output)/config['id']
     root.mkdir(parents=True)
-    data, audit = parcels.extract(config['bbox'], config['max_parcels'])
+    data, audit = parcels.extract(config['bbox'], config['max_parcels'], repair_invalid=True)
     (root/'parcels.geojson').write_text(json.dumps(data, separators=(',', ':')))
     (root/'source-record-hashes.json').write_text(json.dumps(audit))
     metadata = {'layer': get_json(parcels.SOURCE, {'f': 'json'}),
@@ -41,6 +41,7 @@ def build_parcels(config, output):
     return finish(root, config, 'parcels', parcel_source=parcels.SOURCE,
                   attribution='Marion County assessor-derived parcels, hosted by City of Stayton; approximate, not a survey',
                   parcel_count=len(data['features']), owner_count=sum(bool(f['properties'].get('OWNERNAME')) for f in data['features']),
+                  geometry_repairs=[{'id':int(id),**{k:v for k,v in record.items() if k!='source_geometry'}} for id,record in audit.items() if isinstance(record,dict)],
                   legal_access='Unknown', selection_test={'id': test['id'], 'longitude': p.x, 'latitude': p.y})
 
 

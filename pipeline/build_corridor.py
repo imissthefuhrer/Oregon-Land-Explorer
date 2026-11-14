@@ -34,7 +34,7 @@ def validate_vector(path, config):
             assert reader.get(z,x,y), f'Uncovered corridor tile {z}/{x}/{y}'
         targets=[]
         for target in config['targets']:
-            found=Counter(); labels=set()
+            found=Counter(); labels=set(); parks=set()
             for z,x,y in tile_list(target['bbox'], 15,15):
                 blob=reader.get(z,x,y)
                 d=mapbox_vector_tile.decode(gzip.decompress(blob) if blob[:2]==b'\x1f\x8b' else blob)
@@ -42,18 +42,24 @@ def validate_vector(path, config):
                     for feature in data['features']:
                         props=feature['properties']; found[layer+':'+props.get('class','')]+=1
                         if props.get('name'): labels.add(props['name'])
+                        if layer=='land' and props.get('class')=='park' and props.get('name'): parks.add(props['name'])
             assert any(k.startswith('roads:') for k in found), target
-            targets.append({**target,'tile_feature_counts_with_edge_duplicates':dict(found),'names':sorted(labels)})
+            assert found['land:park']>0 and found['water:water']>0, target
+            assert any(found['roads:'+kind]>0 for kind in ['path','footway','cycleway']), target
+            targets.append({**target,'park_polygon_names':sorted(parks),'tile_feature_counts_with_edge_duplicates':dict(found),'names':sorted(labels)})
     assert all(counts[k]>0 for k in ['roads','water','waterway','land','place'])
     # Name audit against OPRD's published maps: absence of a name does not prove absent geometry.
     expected={
-        'Silver Falls State Park':['Canyon Trail','Rim Trail','Maple Ridge Trail','Winter Trail','North Rim Trail','Twin Falls Trail','Howard Creek Loop','Buck Mountain Loop','Catamount Trail','Perimeter Trail','Smith Creek Trail','214 Trail'],
+        'Silver Falls State Park':['Canyon Trail','Rim Trail','Maple Ridge Trail','Winter Trail','North Rim Trail','Twin Falls Trail','Howard Creek Loop','Buck Mountain Loop','Catamount Trail','Perimeter Trail','Smith Creek Trail','214 Trail','Nature Trail','Newt Loop','Lost Creek Trail','Cutoff Trail','Racket Ridge Trail','Racket Ridge Connector Trail',"Roemer’s Meadow Trail",'Lookout Mountain Road','Silver Ridge Road','North Fork Road','Silver Falls Highway'],
         'Willamette Mission State Park':['Willamette Vision Educational Trail']}
     for target in targets:
         checks=expected.get(target['name'],[])
         present={name.casefold() for name in target['names']}
         target['official_map_names_found']=[name for name in checks if name.casefold() in present]
-        target['official_map_names_not_found_exactly']=[name for name in checks if name.casefold() not in present]
+        unmatched=[name for name in checks if name.casefold() not in present]
+        aliases={'Willamette Vision Educational Trail':'Willamette Vision Education Trail','Howard Creek Loop':'Howard Creek Loop Trail','Buck Mountain Loop':'Buck Mountain Loop Trail','Newt Loop':'Newt Loop Trail','Racket Ridge Trail':'Rackett Ridge Trail','Racket Ridge Connector Trail':'Rackett Ridge Connector',"Roemer’s Meadow Trail":"Roemer's Meadow (aka Boomer Meadow)",'Silver Ridge Road':'Silver Ridge Road Southeast','North Fork Road':'North Fork Road Southeast'}
+        target['official_map_name_variants_found']={name:aliases[name] for name in unmatched if aliases.get(name,'').casefold() in present}
+        target['official_map_names_not_found']=[name for name in unmatched if name not in target['official_map_name_variants_found']]
     return {'result':'PASS','tiles':total,'maxzoom_features_with_edge_duplicates':dict(counts),
             'targets':targets,'limits':'Tile counts include edge duplicates. OSM completeness and current trail closures are not independently established.'}
 

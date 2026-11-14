@@ -16,29 +16,29 @@ import java.util.zip.ZipInputStream
 class PackageStore(private val context: Context) {
     private val root = File(context.filesDir,"map-packages").apply { mkdirs() }
     private val index = AtomicFile(File(root,"registry.json"))
-    private fun registry(): JSONObject = if(index.baseFile.exists()) index.openRead().bufferedReader().use { JSONObject(it.readText()) } else JSONObject()
+    private fun registry(): JSONObject = if(index.baseFile.exists() || File(root,"registry.json.bak").exists()) index.openRead().bufferedReader().use { JSONObject(it.readText()) } else JSONObject()
     private fun commit(value: JSONObject) {
         val stream=index.startWrite()
         try { stream.write(value.toString().toByteArray()); index.finishWrite(stream) }
         catch(e: Exception) { index.failWrite(stream); throw e }
     }
-    @Synchronized fun installed(): List<MapPackage> {
+    fun installed(): List<MapPackage> = synchronized(LOCK) {
         val r=registry()
         return r.keys().asSequence().map { id ->
             val record=r.getJSONObject(id)
             MapPackage(File(root,record.getString("current")),record.optBoolean("enabled",true)).also { pack ->
-                validate(pack.directory,pack.manifest,pack.directory.list()!!.toSet())
+                validate(pack.directory,pack.manifest,pack.directory.list()!!.toSet(),false)
             }
         }.sortedBy { it.manifest.getString("name") }.toList()
     }
-    @Synchronized fun installBundled() {
+    fun installBundled(): Unit = synchronized(LOCK) {
         val installed=registry()
         for(name in context.assets.list("packs") ?: emptyArray()) {
             if(installed.has(name.removeSuffix(".olepack"))) continue
             context.assets.open("packs/$name").use { importPackage(it,true) }
         }
     }
-    @Synchronized fun importPackage(input: InputStream, bundled: Boolean = false): MapPackage {
+    fun importPackage(input: InputStream, bundled: Boolean = false): MapPackage = synchronized(LOCK) {
         val stage=File(root,".staging-${UUID.randomUUID()}").apply { mkdir() }
         try {
             val seen=HashSet<String>(); var total=0L
@@ -76,33 +76,51 @@ class PackageStore(private val context: Context) {
             }
             val destination=File(root,"$id-$revision-${digest.take(16)}")
             // An unreferenced complete version may remain after a process interruption.
-            if(destination.exists()) require(sha(File(destination,"manifest.json"))==digest) else check(stage.renameTo(destination)) { "Cannot activate package" }
+            if(destination.exists()) {
+                require(sha(File(destination,"manifest.json"))==digest)
+                validate(destination,m,destination.list()!!.toSet())
+            } else check(stage.renameTo(destination)) { "Cannot activate package" }
             val record=JSONObject().put("current",destination.name).put("enabled",previous?.optBoolean("enabled",true) ?: true)
             previous?.let { record.put("previous",it.getString("current")) }
             r.put(id,record);commit(r)
             return MapPackage(destination,record.getBoolean("enabled"))
         } finally { stage.deleteRecursively() }
     }
-    @Synchronized fun setEnabled(id: String, enabled: Boolean) {
-        val r=registry();r.getJSONObject(id).put("enabled",enabled);commit(r)
+    fun setEnabled(id: String, enabled: Boolean): Unit = synchronized(LOCK) {
+        val r=registry();val record=r.getJSONObject(id)
+        val pack=MapPackage(File(root,record.getString("current")),record.optBoolean("enabled",true))
+        record.put("enabled",enabled)
+        if(pack.kind=="vector" && !enabled) require(hasActiveVector(r)) { "Keep at least one vector basemap enabled" }
+        commit(r)
     }
-    @Synchronized fun rollback(id: String) {
+    fun rollback(id: String): Unit = synchronized(LOCK) {
         val r=registry(); val record=r.getJSONObject(id)
         val old=record.getString("previous")
         val candidate=MapPackage(File(root,old),true)
         validate(candidate.directory,candidate.manifest,candidate.directory.list()!!.toSet())
         record.put("previous",record.getString("current")).put("current",old);commit(r)
     }
-    @Synchronized fun remove(id: String) {
+    fun remove(id: String): Unit = synchronized(LOCK) {
         require(id !in setOf("willamette-silver-outdoors","gervais-original-parcels")) { "Core maps are retained" }
         val r=registry()
-        val versions=root.listFiles()?.filter { it.isDirectory && it.name.startsWith("$id-") } ?: emptyList()
-        r.remove(id);commit(r)
+        val record=r.getJSONObject(id)
+        val pack=MapPackage(File(root,record.getString("current")),record.optBoolean("enabled",true))
+        r.remove(id)
+        if(pack.kind=="vector") require(hasActiveVector(r)) { "Enable another vector basemap before deleting this one" }
+        // Match manifest IDs, not prefixes: deleting "gervais" must never delete "gervais-original-parcels".
+        val versions=root.listFiles()?.filter { dir ->
+            dir.isDirectory && runCatching { JSONObject(File(dir,"manifest.json").readText()).getString("id")==id }.getOrDefault(false)
+        } ?: emptyList()
+        commit(r)
         for(version in versions) check(version.deleteRecursively()) { "Package disabled but some files could not be removed" }
     }
-    fun hasPrevious(id: String)=registry().getJSONObject(id).has("previous")
+    private fun hasActiveVector(r: JSONObject)=r.keys().asSequence().any { id ->
+        val record=r.getJSONObject(id)
+        record.optBoolean("enabled",true) && MapPackage(File(root,record.getString("current")),true).kind=="vector"
+    }
+    fun hasPrevious(id: String)=synchronized(LOCK) { registry().getJSONObject(id).has("previous") }
 
-    private fun validate(dir: File,m: JSONObject,seen: Set<String>) {
+    private fun validate(dir: File,m: JSONObject,seen: Set<String>, deep: Boolean=true) {
         require(m.getInt("schema_version") in 1..2) { "Unsupported package schema" }
         require(m.getString("id").matches(Regex("[a-z][a-z0-9-]{0,63}"))) { "Invalid package ID" }
         require(m.getString("name").length in 1..160 && m.optInt("revision",1)>0)
@@ -120,6 +138,7 @@ class PackageStore(private val context: Context) {
         require(kind in listOf("legacy","vector","parcels","aerial")) { "Unsupported package kind" }
         if(kind in listOf("legacy","parcels")) {
             require(files.containsAll(listOf("parcels.geojson","source-record-hashes.json","source-metadata.json")))
+            if(deep) {
             val data=JSONObject(File(dir,"parcels.geojson").readText()); require(data.getString("type")=="FeatureCollection")
             val features=data.getJSONArray("features")
             require(features.length() in 1..35000 && features.length()==m.getInt("parcel_count"))
@@ -140,7 +159,7 @@ class PackageStore(private val context: Context) {
                 val g=f.getJSONObject("geometry");val c=g.getJSONArray("coordinates")
                 when(g.getString("type")) { "Polygon" -> polygon(c); "MultiPolygon" -> { require(c.length()>0);for(j in 0 until c.length()) polygon(c.getJSONArray(j)) }; else -> error("Invalid parcel geometry") }
             }
-            require(FeatureCollection.fromJson(data.toString()).features()?.size==features.length())
+            }
         }
         if(kind=="vector") require(m.getString("tile_schema")=="oregon-outdoor-v1") { "Unsupported outdoor tile schema" }
         if(kind in listOf("legacy","vector","aerial")) {
@@ -158,6 +177,7 @@ class PackageStore(private val context: Context) {
         }
     }
     companion object {
+        private val LOCK=Any()
         private const val MAX_TOTAL=512L*1024*1024
         private val ALLOWED=setOf("manifest.json","basemap.pmtiles","aerial.pmtiles","parcels.geojson","source-record-hashes.json","source-metadata.json")
         private fun limit(name: String)=when(name) { "manifest.json" -> 128L*1024; "parcels.geojson" -> 64L*1024*1024; "source-record-hashes.json","source-metadata.json" -> 16L*1024*1024; else -> 384L*1024*1024 }

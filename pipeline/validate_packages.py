@@ -22,9 +22,18 @@ def validate(root):
         assert len(ids)==len(set(ids))==m['parcel_count'] and set(ids)==set(audit)
         for f in data:
             g=shape(f['geometry']);assert not g.is_empty and g.is_valid and g.geom_type in ['Polygon','MultiPolygon']
-            assert fingerprint(f)==audit[str(f['properties']['OBJECTID'])]
+            record=audit[str(f['properties']['OBJECTID'])]
+            if isinstance(record,dict):
+                assert fingerprint(f)==record['display_sha256']
+                original={**f,'geometry':record['source_geometry']}
+                assert fingerprint(original)==record['source_sha256']
+                assert not shape(original['geometry']).is_valid
+                assert record['boundary_hausdorff_degrees']<=1e-6
+                assert f['properties']['geometry_repair_note']
+            else:
+                assert fingerprint(f)==record
             assert f['properties']['legal_access']=='Unknown'
-        result.update(parcel_count=len(ids),owners=m['owner_count'],fingerprints='PASS',valid_polygons='PASS')
+        result.update(parcel_count=len(ids),owners=m['owner_count'],fingerprints='PASS',valid_polygons='PASS',source_topology_repairs=m.get('geometry_repairs',[]))
     return result
 
 if __name__=='__main__':

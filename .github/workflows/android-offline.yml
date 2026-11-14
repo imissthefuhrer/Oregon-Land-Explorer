@@ -43,7 +43,10 @@ jobs:
       - name: Retrieve verified PR 3 package without regenerating it
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh run download 43513075004 --name oregon-land-explorer-debug --dir work/baseline
+        run: |
+          gh release download verified-prototype-v1 --pattern app-debug.apk --pattern gervais.olepack --dir work/baseline
+          echo 'd870b8e074b8e24518175cf0fe65fbe5629892c64f397a45129e57a11de2b7bc  work/baseline/app-debug.apk' | sha256sum -c
+          echo '85ae617d402f9d6f3e13c9181eee4579478f5203d2cb2ff8bb7588b9410e1474  work/baseline/gervais.olepack' | sha256sum -c
       - name: Build continuous vector and independent parcel packages
         run: python -m pipeline.build_corridor --baseline work/baseline/gervais.olepack
       - name: Audit all parcel fingerprints
@@ -108,6 +111,7 @@ jobs:
             adb shell svc data disable
             adb shell settings put global airplane_mode_on 1
             python scripts/benchmark-android.py
+            adb shell mkdir -p /sdcard/Download
             adb push output/gervais-countryside.olepack /sdcard/Download/gervais-countryside.olepack
             adb push output/silver-falls.olepack /sdcard/Download/silver-falls.olepack
             cd android && gradle --no-daemon :app:connectedDebugAndroidTest

@@ -38,6 +38,15 @@ class RegionImportTest {
         while(!ready && SystemClock.elapsedRealtime()<deadline) { s.onActivity { ready=it.ready };Thread.sleep(250) }
         assertTrue("Map not ready",ready)
     }
+    private fun evidence(name: String, text: String) {
+        val values=android.content.ContentValues().apply {
+            put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME,name)
+            put(android.provider.MediaStore.MediaColumns.MIME_TYPE,"text/plain")
+            put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH,"Download/ole-evidence")
+        }
+        val uri=context.contentResolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI,values)!!
+        context.contentResolver.openOutputStream(uri)!!.bufferedWriter().use { it.write(text) }
+    }
     @Test fun importUsingAndroidDocumentPickerAndRenderDestinationsOffline() {
         device.executeShellCommand("mkdir -p /sdcard/Download/ole-evidence")
         device.executeShellCommand("cmd connectivity airplane-mode enable")
@@ -81,6 +90,11 @@ class RegionImportTest {
                 }
                 device.executeShellCommand("screencap -p /sdcard/Download/ole-evidence/$name.png")
             }
+            for(i in 0 until 4) device.swipe(250,500,700,500,25)
+            evidence("expanded-all-regions-memory.txt",device.executeShellCommand("dumpsys meminfo ${context.packageName}"))
+            evidence("expanded-installed-storage.txt",PackageStore(context).installed().joinToString("\n") { p ->
+                "${p.id}: ${p.directory.walkTopDown().filter { it.isFile }.sumOf { it.length() }} bytes"
+            })
             // Feed the real LocationManager test provider so GPS listener/recenter runs offline.
             device.executeShellCommand("pm grant ${context.packageName} android.permission.ACCESS_FINE_LOCATION")
             device.executeShellCommand("pm grant ${context.packageName} android.permission.ACCESS_COARSE_LOCATION")
@@ -115,10 +129,10 @@ class RegionImportTest {
         }
     }
 
-    private fun archive(revision: Int=1,corrupt: Boolean=false,path: String="parcels.geojson"): ByteArray {
+    private fun archive(revision: Int=1,corrupt: Boolean=false,path: String="parcels.geojson",id: String="synthetic-import-test"): ByteArray {
         val data="""{"type":"FeatureCollection","features":[{"type":"Feature","properties":{"OBJECTID":1,"OWNERNAME":"Synthetic test","TAXLOT":"1"},"geometry":{"type":"Polygon","coordinates":[[[-123,45],[-122.99,45],[-122.99,45.01],[-123,45.01],[-123,45]]]}}]}""".toByteArray()
         val digest=MessageDigest.getInstance("SHA-256").digest(data).joinToString("") { "%02x".format(it) }
-        val m=JSONObject().put("schema_version",2).put("id","synthetic-import-test").put("name","Synthetic import test").put("revision",revision).put("kind","parcels").put("attribution","Synthetic test only").put("bbox",org.json.JSONArray("[-123,45,-122.99,45.01]")).put("parcel_count",1)
+        val m=JSONObject().put("schema_version",2).put("id",id).put("name","Synthetic import test").put("revision",revision).put("kind","parcels").put("attribution","Synthetic test only").put("bbox",org.json.JSONArray("[-123,45,-122.99,45.01]")).put("parcel_count",1)
         val payload=mapOf(path to data,"source-record-hashes.json" to "{}".toByteArray(),"source-metadata.json" to "{}".toByteArray())
         val hashes=JSONObject()
         for((name,bytes) in payload) hashes.put(name,MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) })
@@ -142,6 +156,13 @@ class RegionImportTest {
         try { store.importPackage(ByteArrayInputStream(archive(1)));fail("Downgrade accepted") } catch(expected: IllegalArgumentException) { }
         store.rollback("synthetic-import-test")
         assertEquals(first,store.installed().first { it.id=="synthetic-import-test" }.directory)
-        store.setEnabled("synthetic-import-test",false)
+        store.importPackage(ByteArrayInputStream(archive(id="synthetic-import-test-child")))
+        store.remove("synthetic-import-test")
+        assertTrue("Deleting a parent ID must preserve a different prefixed ID",store.installed().any { it.id=="synthetic-import-test-child" })
+        store.setEnabled("synthetic-import-test-child",false)
+        if(store.installed().any { it.id=="willamette-silver-outdoors" }) {
+            try { store.setEnabled("willamette-silver-outdoors",false);fail("Last vector basemap disabled") } catch(expected: IllegalArgumentException) { }
+            assertTrue(store.installed().first { it.id=="willamette-silver-outdoors" }.enabled)
+        }
     }
 }

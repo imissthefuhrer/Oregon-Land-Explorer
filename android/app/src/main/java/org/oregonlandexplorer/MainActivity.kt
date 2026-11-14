@@ -141,7 +141,8 @@ class MainActivity : AppCompatActivity(), LocationListener {
 
     private fun showParcel(feature: Feature) {
         map?.style?.getSourceAs<GeoJsonSource>("selection")?.setGeoJson(feature)
-        sheet("Property details", "Owner: ${value(feature,"OWNERNAME")}\n\nTax lot: ${value(feature,"TAXLOT")}\nAcres: ${value(feature,"ACRES")}\n\nOwnership classification: Unknown\nLegal public access: Unknown\n\nMarion County assessor-derived record. Boundaries are approximate, not a survey. Ownership does not establish permission to enter.")
+        val repair=feature.getProperty("geometry_repair_note")?.takeUnless { it.isJsonNull }?.asString?.let { "\n\n$it" } ?: ""
+        sheet("Property details", "Owner: ${value(feature,"OWNERNAME")}\n\nTax lot: ${value(feature,"TAXLOT")}\nAcres: ${value(feature,"ACRES")}\n\nOwnership classification: Unknown\nLegal public access: Unknown\n\nMarion County assessor-derived record. Boundaries are approximate, not a survey. Ownership does not establish permission to enter.$repair")
     }
     private fun sheet(title: String, body: String) {
         val dialog = BottomSheetDialog(this)

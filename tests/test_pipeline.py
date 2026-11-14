@@ -76,3 +76,21 @@ def test_invalid_geometry_fails_without_repair():
             result['features'][0]['geometry']['coordinates']=[[[0,0],[1,1],[1,0],[0,1],[0,0]]]
         return result
     with pytest.raises(ValueError,match='Invalid polygon'): extract([0,0,1,1],10,request)
+
+
+def test_requested_topology_repair_retains_source_and_owner_audit():
+    from shapely.geometry import shape
+    base,_=service(count=1)
+    def request(url,p):
+        result=base(url,p)
+        if 'features' in result:
+            result['features'][0]['geometry']['coordinates']=[[[0,0],[1,1],[1,0],[0,1],[0,0]]]
+        return result
+    data,audit=extract([0,0,1,1],10,request,repair_invalid=True)
+    f=data['features'][0];record=audit['0']
+    assert shape(f['geometry']).is_valid
+    assert fingerprint(f)==record['display_sha256']
+    assert fingerprint({**f,'geometry':record['source_geometry']})==record['source_sha256']
+    assert f['properties']['OWNERNAME']=='Synthetic test'
+    assert f['properties']['geometry_repair_note']
+    assert record['boundary_hausdorff_degrees']<=1e-6
