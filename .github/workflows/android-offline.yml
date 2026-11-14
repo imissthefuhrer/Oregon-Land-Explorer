@@ -159,6 +159,7 @@ jobs:
             output/packages-validation.json
             output/storage.json
             output/memory.txt
+            output/emulator-crashes.txt
             output/*performance*.json
             output/*instrumentation.txt
             output/*cold*.txt

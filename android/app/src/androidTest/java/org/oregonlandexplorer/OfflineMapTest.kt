@@ -120,9 +120,16 @@ class OfflineMapTest {
             scenario.onActivity { it.map!!.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(44.7,-123.2),15.0)) }
             Thread.sleep(1500)
             onView(withText(containsString("Area not downloaded"))).check(matches(isDisplayed()))
-            scenario.recreate()
-            Thread.sleep(5000)
-            scenario.onActivity { assertTrue("Restart did not reload local region",it.ready) }
+            repeat(5) { iteration ->
+                scenario.recreate()
+                var rendered=false
+                val restartDeadline=System.currentTimeMillis()+30000
+                while(!rendered && System.currentTimeMillis()<restartDeadline) {
+                    scenario.onActivity { rendered=it.ready && it.mapReadyMs>0 }
+                    Thread.sleep(100)
+                }
+                assertTrue("Restart $iteration did not render the local region",rendered)
+            }
         }
     }
 }

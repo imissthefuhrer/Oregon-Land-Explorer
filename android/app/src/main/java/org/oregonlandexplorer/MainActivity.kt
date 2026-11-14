@@ -108,13 +108,20 @@ class MainActivity : AppCompatActivity(), LocationListener {
             loaded.uiSettings.isAttributionEnabled = false // Full source attribution lives in the Info sheet.
             loaded.setMinZoomPreference(8.0)
             loaded.setMaxZoomPreference(19.0)
-            // Disk reads are cheap offline. Avoid retaining decoded tiles at old zooms.
-            loaded.setPrefetchZoomDelta(PARCEL_PREFETCH_ZOOM_DELTA)
-            loaded.setTileCacheEnabled(false)
+            // Map-ready can precede native renderer creation during recreation.
+            // Renderer-dependent cache policy belongs after its first complete frame.
+            var tilePolicyApplied=false
             loaded.addOnCameraMoveStartedListener { _ -> parcelGeneration++;viewportGeneration++ }
             loaded.addOnCameraIdleListener { updateStatus();loadLegacyViewport() }
             mapView.addOnDidFinishRenderingMapListener { fully ->
-                if(fully && mapReadyMs==0L) mapReadyMs=android.os.SystemClock.elapsedRealtime()-launchedAt
+                if(fully && !destroyed) {
+                    if(!tilePolicyApplied) {
+                        tilePolicyApplied=true
+                        loaded.setPrefetchZoomDelta(PARCEL_PREFETCH_ZOOM_DELTA)
+                        loaded.setTileCacheEnabled(false)
+                    }
+                    if(mapReadyMs==0L) mapReadyMs=android.os.SystemClock.elapsedRealtime()-launchedAt
+                }
             }
             loaded.addOnMapClickListener { point -> selectParcel(point) }
             Thread {
