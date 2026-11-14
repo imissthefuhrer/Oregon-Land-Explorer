@@ -45,10 +45,21 @@ jobs:
           mkdir -p work/baseline-source/android/app/src/androidTest/assets/test-packs
           cp work/expanded/*.olepack work/baseline-source/android/app/src/androidTest/assets/test-packs/
           cp android/app/src/androidTest/java/org/oregonlandexplorer/ParcelPerformanceTest.kt work/baseline-source/android/app/src/androidTest/java/org/oregonlandexplorer/
+      - name: Retain passed paired measurements only for unchanged app and GIS code
+        id: paired
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet bb2d616a2d1b490d7ceb9e6f960606a93654db25 HEAD -- android pipeline scripts/benchmark-parcels.sh scripts/summarize-parcel-performance.py; then
+            gh run download 43621106452 --name offline-test-evidence --dir work/paired-evidence
+            python scripts/reuse-parcel-benchmark.py work/paired-evidence
+            python scripts/summarize-parcel-performance.py
+            echo 'reused=true' >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/cache/restore@v4
         id: parcel-cache
         with:
-          key: optimized-parcels-v2-${{ hashFiles('pipeline/**', 'scripts/verify-expanded-inputs.py') }}
+          key: optimized-parcels-v2-${{ hashFiles('pipeline/**/*.py', 'pipeline/requirements.txt', 'scripts/verify-expanded-inputs.py') }}
           path: |
             output/*/
             output/*.olepack
@@ -64,7 +75,7 @@ jobs:
       - uses: actions/cache/save@v4
         if: steps.parcel-cache.outputs.cache-hit != 'true'
         with:
-          key: optimized-parcels-v2-${{ hashFiles('pipeline/**', 'scripts/verify-expanded-inputs.py') }}
+          key: optimized-parcels-v2-${{ hashFiles('pipeline/**/*.py', 'pipeline/requirements.txt', 'scripts/verify-expanded-inputs.py') }}
           path: |
             output/*/
             output/*.olepack
@@ -126,6 +137,7 @@ jobs:
         env:
           OLE_KEYSTORE: ${{ runner.temp }}/ole-signing.p12
           OLE_STORE_PASSWORD: ${{ secrets.OLE_STORE_PASSWORD }}
+          OLE_REUSE_BENCHMARK: ${{ steps.paired.outputs.reused }}
         with:
           api-level: 35
           arch: x86_64
@@ -133,20 +145,7 @@ jobs:
           profile: pixel_2
           disable-animations: true
           emulator-options: -no-window -gpu host -feature -Vulkan -noaudio -no-boot-anim -camera-back none
-          script: |
-            adb shell svc wifi disable
-            adb shell svc data disable
-            adb shell settings put global airplane_mode_on 1
-            bash scripts/benchmark-parcels.sh
-            adb shell mkdir -p /sdcard/Download
-            adb push output/gervais-countryside.olepack /sdcard/Download/gervais-countryside.olepack
-            adb push output/silver-falls.olepack /sdcard/Download/silver-falls.olepack
-            # Performance already executed separately against each APK.
-            cd android
-            gradle --no-daemon :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.notClass=org.oregonlandexplorer.ParcelPerformanceTest,org.oregonlandexplorer.ParcelDatabaseTest
-            cd ..
-            adb pull /sdcard/Download/ole-evidence/. output/emulator-screenshots/
-            python scripts/summarize-parcel-performance.py
+          script: bash scripts/test-parcel-device.sh
       - name: Upload test evidence
         if: always()
         uses: actions/upload-artifact@v4
