@@ -56,6 +56,18 @@ home coordinates must never be committed.
 Regional rectangles include complete source-selected taxlots, with a full
 geometry/attribute fingerprint audit. Duplicate Marion OBJECTIDs in overlapping
 packs are resolved in favor of the later extraction, without duplicating popups.
+New extracts may contain invalid source topology. The regional builder uses
+Shapely's explicit `make_valid(structure)` only when the resulting polygon is
+valid and its boundary follows the original source linework (within a `1e-7`
+degree buffer, about 1 cm). This may remove invalid internal edges where source
+parts overlap; it is not a claim that every original edge is a true property edge.
+Original invalid geometry, source fingerprint, display fingerprint, reason, area
+change and removed/internal-edge Hausdorff distance remain in the audit. Repaired properties have a popup notice and
+are listed in the manifest/test report. This does not establish the true legal
+boundary. The original PR #3 payload is never repaired or refetched. By default
+the original extractor still rejects invalid geometry; repair is explicitly
+requested only by the expanded regional builder.
+
 Basemap and parcel coverage warnings are separate. A vector map outside the
 parcel rectangles does not imply owner information is installed there. The
 Marion source contains no neighboring-county property records, including across
@@ -104,7 +116,9 @@ or non-root filenames, missing/unlisted payloads, bad hashes, unsupported PMTile
 headers/types/offsets/zooms, excessive expansion and malformed parcel structures.
 Limits: 8 entries, 512 MiB total expansion, 384 MiB per PMTiles, 64 MiB GeoJSON,
 35,000 parcels and 3 million vertices; manifests are capped at 128 KiB.
-A corrupt archive does not activate. A normal update requires a strictly higher
+A corrupt archive does not activate. Before publishing a data update, increment
+`revision` in `regions/corridor.json`; rebuilding the same revision does not
+authorize replacement of different installed bytes. A normal update requires a strictly higher
 revision; identical reimports are harmless. Rollback is an explicit user action.
 
 Validated versions are immutable. Installation stages and syncs files, renames the

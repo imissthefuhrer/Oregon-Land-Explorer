@@ -52,17 +52,23 @@ def extract(bounds, limit, request=get_json, repair_invalid=False):
                 fixed = make_valid(geometry, method='structure', keep_collapsed=False)
                 if fixed.is_empty or not fixed.is_valid or fixed.geom_type not in ('Polygon','MultiPolygon'):
                     raise ValueError(f'Source polygon cannot be displayed safely: {feature["properties"]["OBJECTID"]}')
-                # Reject a repair that moves the source boundary by more than ~0.1m.
+                # Unioning overlapping source parts legitimately removes internal edges.
+                # Reject invented boundary segments, rather than symmetric Hausdorff
+                # distance (which incorrectly treats removed interior edges as movement).
+                tolerance = 1e-7  # about 1 cm at these latitudes
+                outside = fixed.boundary.difference(geometry.boundary.buffer(tolerance)).length
+                if outside > tolerance:
+                    raise ValueError(f'Repair would invent boundary segments: OBJECTID {feature["properties"]["OBJECTID"]}, {outside} degrees')
                 distance = geometry.boundary.hausdorff_distance(fixed.boundary)
-                if distance > 1e-6:
-                    raise ValueError(f'Repair would change boundary materially: OBJECTID {feature["properties"]["OBJECTID"]}, {distance} degrees')
                 feature['geometry'] = mapping(fixed)
                 feature['properties']['geometry_repair_note'] = 'Invalid source polygon; display topology repaired. Verify against original source.'
                 repair = {'source_geometry': source_geometry, 'source_sha256': source_digest,
                           'reason': reason, 'method': 'Shapely make_valid structure; keep_collapsed=False',
-                          'boundary_hausdorff_degrees': distance}
+                          'source_display_boundary_hausdorff_degrees': distance,
+                          'display_boundary_outside_source_buffer_degrees': outside,
+                          'source_area_degrees2': geometry.area, 'display_area_degrees2': fixed.area}
                 geometry = fixed
-                print(f'Audited source topology repair: OBJECTID={feature["properties"]["OBJECTID"]}, {reason}, boundary displacement={distance}', flush=True)
+                print(f'Audited source topology repair: OBJECTID={feature["properties"]["OBJECTID"]}, {reason}, removed/internal-edge Hausdorff={distance}, invented boundary length={outside}', flush=True)
             intersects = geometry.intersects(box(*bounds))
             if not intersects:
                 print(f'ArcGIS spatial candidate outside exact region: OBJECTID={feature["properties"]["OBJECTID"]}, bounds={geometry.bounds}', flush=True)

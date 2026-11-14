@@ -61,8 +61,20 @@ jobs:
           gh release download verified-prototype-v1 --pattern app-debug.apk --pattern gervais.olepack --dir work/baseline
           echo 'd870b8e074b8e24518175cf0fe65fbe5629892c64f397a45129e57a11de2b7bc  work/baseline/app-debug.apk' | sha256sum -c
           echo '85ae617d402f9d6f3e13c9181eee4579478f5203d2cb2ff8bb7588b9410e1474  work/baseline/gervais.olepack' | sha256sum -c
+      - id: snapshot
+        run: echo "day=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@v4
+        id: osm-cache
+        with:
+          path: work/vector/oregon.osm.pbf
+          key: geofabrik-oregon-${{ steps.snapshot.outputs.day }}
       - name: Build continuous vector and independent parcel packages
         run: python -m pipeline.build_corridor --baseline work/baseline/gervais.olepack
+      - uses: actions/cache/save@v4
+        if: ${{ !cancelled() && steps.osm-cache.outputs.cache-hit != 'true' && hashFiles('work/vector/source-info.json') != '' }}
+        with:
+          path: work/vector/oregon.osm.pbf
+          key: geofabrik-oregon-${{ steps.snapshot.outputs.day }}
       - name: Audit all parcel fingerprints
         run: python -m pipeline.validate_packages
       - name: Restore stable expanded-app signing key

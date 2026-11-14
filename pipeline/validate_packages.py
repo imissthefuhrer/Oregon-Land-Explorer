@@ -28,12 +28,15 @@ def validate(root):
                 original={**f,'geometry':record['source_geometry']}
                 assert fingerprint(original)==record['source_sha256']
                 assert not shape(original['geometry']).is_valid
-                assert record['boundary_hausdorff_degrees']<=1e-6
+                assert record['display_boundary_outside_source_buffer_degrees']<=1e-7
+                assert g.boundary.difference(shape(original['geometry']).boundary.buffer(1e-7)).length<=1e-7
                 assert f['properties']['geometry_repair_note']
             else:
                 assert fingerprint(f)==record
             assert f['properties']['legal_access']=='Unknown'
-        result.update(parcel_count=len(ids),owners=m['owner_count'],fingerprints='PASS',valid_polygons='PASS',source_topology_repairs=m.get('geometry_repairs',[]))
+        outside=[f['id'] for f in data if not f['properties']['intersects_region']]
+        assert outside==m['spatial_candidate_ids_outside_region']
+        result.update(spatial_candidate_ids_outside_region=outside,parcel_count=len(ids),owners=m['owner_count'],fingerprints='PASS',valid_polygons='PASS',source_topology_repairs=m.get('geometry_repairs',[]))
     return result
 
 if __name__=='__main__':

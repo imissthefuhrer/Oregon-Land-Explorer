@@ -42,6 +42,7 @@ def build_parcels(config, output):
                   attribution='Marion County assessor-derived parcels, hosted by City of Stayton; approximate, not a survey',
                   parcel_count=len(data['features']), owner_count=sum(bool(f['properties'].get('OWNERNAME')) for f in data['features']),
                   geometry_repairs=[{'id':int(id),**{k:v for k,v in record.items() if k!='source_geometry'}} for id,record in audit.items() if isinstance(record,dict)],
+                  spatial_candidate_ids_outside_region=[f['id'] for f in data['features'] if not f['properties']['intersects_region']],
                   legal_access='Unknown', selection_test={'id': test['id'], 'longitude': p.x, 'latitude': p.y})
 
 
@@ -58,4 +59,4 @@ def split_baseline(source, output):
                 data = z.read(name)
                 assert hashlib.sha256(data).hexdigest() == old['sha256'][name]
                 (root/name).write_bytes(data)
-            finish(root, config, kind, **{k: old[k] for k in ['parcel_count','tile_count','owner_count','selection_test','attribution','parcel_source','imagery_source']})
+            finish(root, config, kind, **{k: old[k] for k in ['parcel_count','tile_count','owner_count','selection_test','attribution','parcel_source','imagery_source','spatial_candidate_ids_outside_region']})

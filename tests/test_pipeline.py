@@ -93,4 +93,4 @@ def test_requested_topology_repair_retains_source_and_owner_audit():
     assert fingerprint({**f,'geometry':record['source_geometry']})==record['source_sha256']
     assert f['properties']['OWNERNAME']=='Synthetic test'
     assert f['properties']['geometry_repair_note']
-    assert record['boundary_hausdorff_degrees']<=1e-6
+    assert record['display_boundary_outside_source_buffer_degrees']<=1e-7
