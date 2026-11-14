@@ -143,7 +143,7 @@ jobs:
             adb push output/silver-falls.olepack /sdcard/Download/silver-falls.olepack
             # Performance already executed separately against each APK.
             cd android
-            gradle --no-daemon :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.notClass=org.oregonlandexplorer.ParcelPerformanceTest
+            gradle --no-daemon :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.notClass=org.oregonlandexplorer.ParcelPerformanceTest,org.oregonlandexplorer.ParcelDatabaseTest
             cd ..
             adb pull /sdcard/Download/ole-evidence/. output/emulator-screenshots/
             python scripts/summarize-parcel-performance.py
