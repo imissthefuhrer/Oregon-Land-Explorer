@@ -6,15 +6,18 @@ its APK are preserved. [Prototype architecture/evidence](offline-android-prototy
 
 ## Android installation and import
 
-1. Open this PR's successful **Offline Android APK** run. Download the
-   **oregon-land-explorer-expanded** artifact while signed into GitHub and extract
-   the ZIP in Android's Files app. Install `app-debug.apk` (Android 8+).
+1. Open the [v0.2 preview release](https://github.com/imissthefuhrer/Oregon-Land-Explorer/releases/tag/expanded-v0.2)
+   in the phone's browser. Download and install `oregon-land-explorer-expanded.apk`.
+   Allow installation from that browser/file manager when Android prompts.
+   ARM64 and x86_64 are included; minimum Android 8 is declared, and API 35 is tested.
+   The Actions artifact is also available as a ZIP containing `app-debug.apk`.
 2. Open **Oregon Land Explorer Expanded**. It installs beside the tested prototype;
    do not uninstall the original app. Future expanded-app APKs use a persistent
    signing key held in repository Actions secrets, with a local private backup.
 3. The outdoor corridor and the original 803-parcel Gervais extract are bundled.
    No additional download is needed to open the continuous road/trail basemap.
-4. For broader property details, choose **Region → Import .olepack from Downloads**
+4. Download `gervais-countryside.olepack` and `silver-falls.olepack` from that
+   release into Downloads; keep these archives intact. For broader property details, choose **Region → Import .olepack from Downloads**
    and select `gervais-countryside.olepack`. Repeat with `silver-falls.olepack`.
    The Android document picker also supports other document providers. The app
    copies files to private storage; Downloads can subsequently be removed.
