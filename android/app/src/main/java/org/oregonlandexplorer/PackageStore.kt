@@ -125,6 +125,7 @@ class PackageStore(private val context: Context) {
         require(m.getString("id").matches(Regex("[a-z][a-z0-9-]{0,63}"))) { "Invalid package ID" }
         require(m.getString("name").length in 1..160 && m.optInt("revision",1)>0)
         require(m.getString("attribution").length in 1..4000)
+        java.time.Instant.parse(m.getString("extracted_at")) // Reject ambiguous freshness metadata.
         val b=m.getJSONArray("bbox")
         require(b.length()==4 && (-125.0<=b.getDouble(0) && b.getDouble(0)<b.getDouble(2) && b.getDouble(2)<= -116.0) && (41.0<=b.getDouble(1) && b.getDouble(1)<b.getDouble(3) && b.getDouble(3)<=47.0)) { "Invalid Oregon coverage bounds" }
         val hashes=m.getJSONObject("sha256")

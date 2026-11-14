@@ -59,4 +59,5 @@ def split_baseline(source, output):
                 data = z.read(name)
                 assert hashlib.sha256(data).hexdigest() == old['sha256'][name]
                 (root/name).write_bytes(data)
-            finish(root, config, kind, **{k: old[k] for k in ['parcel_count','tile_count','owner_count','selection_test','attribution','parcel_source','imagery_source','spatial_candidate_ids_outside_region']})
+            finish(root, config, kind, extracted_at=old['extracted_at'],
+                   packaged_at=datetime.now(timezone.utc).isoformat(), **{k: old[k] for k in ['parcel_count','tile_count','owner_count','selection_test','attribution','parcel_source','imagery_source','spatial_candidate_ids_outside_region']})

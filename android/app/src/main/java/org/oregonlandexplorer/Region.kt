@@ -23,7 +23,7 @@ class Region(private val context: Context) {
         base=active.firstOrNull { it.kind=="vector" } ?: error("Enable an installed vector basemap")
         parcelPackages=active.filter { it.kind in listOf("parcels","legacy") }
         val unique=LinkedHashMap<Long,Feature>()
-        for(pack in parcelPackages.sortedBy { it.manifest.optString("extracted_at") }) {
+        for(pack in parcelPackages.sortedBy { java.time.Instant.parse(it.manifest.getString("extracted_at")) }) {
             for(feature in pack.parcels().features() ?: emptyList()) unique[feature.getNumberProperty("OBJECTID").toLong()]=feature
         }
         parcels=FeatureCollection.fromFeatures(unique.values.toList())

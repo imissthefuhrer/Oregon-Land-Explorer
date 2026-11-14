@@ -103,7 +103,7 @@ class RegionImportTest {
                 assertTrue(a.region!!.containsParcel(45.13,-122.947))
             }
             // Independent second region import uses the exact same validated importer.
-            PackageStore(context).importPackage(context.assets.open("test-packs/silver-falls.olepack"))
+            PackageStore(context).importPackage(instrumentation.context.assets.open("test-packs/silver-falls.olepack"))
             scenario.recreate();waitReady(scenario)
             val targets=listOf(Triple("gervais",LatLng(45.108,-122.897),"roads"),Triple("st-louis",LatLng(45.130,-122.947),"roads"),Triple("willamette",LatLng(45.085,-123.045),"trails"),Triple("silver-falls",LatLng(44.877,-122.655),"trails"))
             for((name,point,layer) in targets) {
@@ -142,7 +142,7 @@ class RegionImportTest {
             }
             locations.removeTestProvider(LocationManager.GPS_PROVIDER)
             device.executeShellCommand("screencap -p /sdcard/Download/ole-evidence/gps-offline.png")
-            PackageStore(context).importPackage(context.assets.open("test-packs/gervais-original-aerial.olepack"))
+            PackageStore(context).importPackage(instrumentation.context.assets.open("test-packs/gervais-original-aerial.olepack"))
             scenario.recreate();waitReady(scenario)
             scenario.onActivity { a -> val p=a.region!!.packages.first { it.id=="gervais-original-parcels" }.manifest.getJSONObject("selection_test");a.map!!.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(p.getDouble("latitude"),p.getDouble("longitude")),18.0)) }
             onView(withText("Region")).perform(click())
@@ -163,7 +163,7 @@ class RegionImportTest {
     private fun archive(revision: Int=1,corrupt: Boolean=false,path: String="parcels.geojson",id: String="synthetic-import-test"): ByteArray {
         val data="""{"type":"FeatureCollection","features":[{"type":"Feature","properties":{"OBJECTID":1,"OWNERNAME":"Synthetic test","TAXLOT":"1"},"geometry":{"type":"Polygon","coordinates":[[[-123,45],[-122.99,45],[-122.99,45.01],[-123,45.01],[-123,45]]]}}]}""".toByteArray()
         val digest=MessageDigest.getInstance("SHA-256").digest(data).joinToString("") { "%02x".format(it) }
-        val m=JSONObject().put("schema_version",2).put("id",id).put("name","Synthetic import test").put("revision",revision).put("kind","parcels").put("attribution","Synthetic test only").put("bbox",org.json.JSONArray("[-123,45,-122.99,45.01]")).put("parcel_count",1)
+        val m=JSONObject().put("schema_version",2).put("id",id).put("name","Synthetic import test").put("extracted_at","2026-01-01T00:00:00Z").put("revision",revision).put("kind","parcels").put("attribution","Synthetic test only").put("bbox",org.json.JSONArray("[-123,45,-122.99,45.01]")).put("parcel_count",1)
         val payload=mapOf(path to data,"source-record-hashes.json" to "{}".toByteArray(),"source-metadata.json" to "{}".toByteArray())
         val hashes=JSONObject()
         for((name,bytes) in payload) hashes.put(name,MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) })
