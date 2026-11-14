@@ -228,7 +228,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
         val installed=region ?: return
         val records=installed.packages.joinToString("\n\n") { p ->
             val m=p.manifest
-            "${if(p.enabled) "Enabled" else "Disabled"}: ${m.getString("name")}\n${p.kind} · revision ${m.optInt("revision",1)} · ${"%.2f".format(p.directory.walkTopDown().filter { it.isFile }.sumOf { it.length() }/1048576.0)} MiB\nBounds W,S,E,N: ${m.getJSONArray("bbox")}\nExtracted: ${m.optString("extracted_at")}\n${m.getString("attribution")}"
+            "${if(p.enabled) "Enabled" else "Disabled"}: ${m.getString("name")}\n${p.kind} · revision ${m.optInt("revision",1)} · ${"%.2f".format(p.payloadBytes/1048576.0)} MiB\nBounds W,S,E,N: ${m.getJSONArray("bbox")}\nExtracted: ${m.optString("extracted_at")}\n${m.getString("attribution")}"
         }
         sheet("Installed map data", "$records\n\n${installed.manifest.getInt("parcel_count")} installed parcel records (overlap resolved on selection).\n\n© OpenStreetMap contributors. Open data under ODbL 1.0: https://www.openstreetmap.org/copyright · https://opendatacommons.org/licenses/odbl/1-0/\nOutdoor data: Geofabrik Oregon extract, compiled with Tilemaker. Fonts: Noto Sans (SIL OFL 1.1). MapLibre Native (BSD-2-Clause).\n\nRoads are light; trails are rust dashes; forest tracks are brown dashes; mapped access=no/private is overprinted purple. These tags are not proof of access. Confirm restrictions and current closures locally.\n\nParcel source: https://services3.arcgis.com/SXXjryU22GsO8OEC/arcgis/rest/services/Parcels/FeatureServer/0\nApproximate assessor-derived boundaries, not surveys; source vintage and completeness are not independently verified. Ownership and legal public access remain Unknown.\n\nAll map data, labels and fonts are local. No internet permission. Vector geometry is stored through zoom 15 and magnified above it; aerial through zoom 17. Home coverage must be checked privately using GPS.")
     }
@@ -258,7 +258,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
         androidx.appcompat.app.AlertDialog.Builder(this).setTitle("Installed packages")
             .setItems(packs.map { "${if(it.enabled) "✓" else "○"} ${it.manifest.getString("name")}" }.toTypedArray()) { _, index ->
                 val pack=packs[index];val actions=mutableListOf(if(pack.enabled) "Disable" else "Enable", "Show coverage")
-                if(installed.store.hasPrevious(pack.id)) actions.add("Restore previous version")
+                if(pack.id in installed.previousPackageIds) actions.add("Restore previous version")
                 if(pack.id !in setOf("willamette-silver-outdoors","gervais-original-parcels")) actions.add("Delete downloaded package")
                 androidx.appcompat.app.AlertDialog.Builder(this).setTitle(pack.manifest.getString("name"))
                     .setItems(actions.toTypedArray()) { _, action ->

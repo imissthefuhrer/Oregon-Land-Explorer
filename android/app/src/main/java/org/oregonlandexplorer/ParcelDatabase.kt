@@ -90,7 +90,7 @@ object ParcelDatabase {
                 val a=r.getJSONArray(i);val b=r.getJSONArray(i+1)
                 val ax=a.getDouble(0);val ay=a.getDouble(1);val bx=b.getDouble(0);val by=b.getDouble(1)
                 val cross=(lon-ax)*(by-ay)-(lat-ay)*(bx-ax)
-                if(kotlin.math.abs(cross)<=1e-14 && lon>=minOf(ax,bx) && lon<=maxOf(ax,bx) && lat>=minOf(ay,by) && lat<=maxOf(ay,by)) return 2
+                if(kotlin.math.abs(cross)<=1e-12*maxOf(kotlin.math.abs(bx-ax),kotlin.math.abs(by-ay)) && lon>=minOf(ax,bx) && lon<=maxOf(ax,bx) && lat>=minOf(ay,by) && lat<=maxOf(ay,by)) return 2
                 if((ay>lat)!=(by>lat) && lon<(bx-ax)*(lat-ay)/(by-ay)+ax) inside=!inside
             }
             return if(inside) 1 else 0

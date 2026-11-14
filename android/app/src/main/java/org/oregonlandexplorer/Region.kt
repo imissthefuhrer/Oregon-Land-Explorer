@@ -12,6 +12,8 @@ class Region(private val context: Context) {
     val packages: List<MapPackage>
     val manifest: JSONObject
     val parcelPackages: List<MapPackage>
+    val previousPackageIds: Set<String>
+    private val styleTemplate=context.assets.open("outdoor-style.json").bufferedReader().use { it.readText() }
     val legacyPackages: List<MapPackage> get()=parcelPackages.filter { !it.tiled }
     val parcelLayerIds: List<String> get()=listOf("parcel-fill","parcel-line","selected-line")+parcelPackages.filter { it.tiled }.flatMap { listOf("parcel-fill-${it.id}","parcel-line-${it.id}") }
     private val base: MapPackage
@@ -19,6 +21,7 @@ class Region(private val context: Context) {
     init {
         store.installBundled()
         packages=store.installed()
+        previousPackageIds=packages.filter { store.hasPrevious(it.id) }.map { it.id }.toSet()
         val active=packages.filter { it.enabled }
         bases=active.filter { it.kind=="vector" }
         base=active.firstOrNull { it.kind=="vector" } ?: error("Enable an installed vector basemap")
@@ -58,7 +61,7 @@ class Region(private val context: Context) {
     fun containsParcel(latitude: Double,longitude: Double)=parcelPackages.any { it.contains(latitude,longitude) }
     fun containsAerial(latitude: Double,longitude: Double)=packages.any { it.enabled && it.kind in listOf("aerial","legacy") && it.contains(latitude,longitude) }
     fun style(aerial: Boolean=false): String {
-        val style=JSONObject(context.assets.open("outdoor-style.json").bufferedReader().use { it.readText() })
+        val style=JSONObject(styleTemplate)
         style.getJSONObject("sources").getJSONObject("outdoors").put("url",base.url("basemap.pmtiles"))
         // Each additional compatible outdoor archive gets its own local source and layers.
         // Imported packages cannot inject remote styles, URLs, glyphs or executable code.

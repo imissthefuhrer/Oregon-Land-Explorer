@@ -34,9 +34,6 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.11.1'
-      - name: Compile app and instrumentation before GIS extraction
-        working-directory: android
-        run: gradle --no-daemon :app:compileDebugKotlin :app:compileDebugAndroidTestKotlin
       - name: Retrieve pinned PR 4 inputs and preserve baseline source
         env:
           GH_TOKEN: ${{ github.token }}
@@ -52,6 +49,9 @@ jobs:
         run: python -m pipeline.optimize_release --source work/expanded
       - name: Audit exact rows, fingerprints, tile identities, geometry and checksums
         run: python -m pipeline.validate_packages
+      - name: Compile app and instrumentation after geometry validation
+        working-directory: android
+        run: gradle --no-daemon :app:compileDebugKotlin :app:compileDebugAndroidTestKotlin
       - name: Restore stable expanded-app signing key
         env:
           OLE_SIGNING_KEY: ${{ secrets.OLE_SIGNING_KEY }}

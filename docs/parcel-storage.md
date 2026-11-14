@@ -75,7 +75,8 @@ every exact component. These are approximate assessor polygons, never a survey.
 Every source-selected ID, including explicitly reported outside-envelope
 candidates, must exist exactly once in SQLite and appear at maximum tile zoom.
 The validator decodes all tiles and independently reassembles maximum-zoom pieces
-to check against the source display polygons within one grid unit. Original and
+to check that interiors and holes wider than one grid unit match the source
+display polygons. Subpixel sliver changes are counted and reported explicitly. Original and
 repaired display fingerprints are reconciled separately. Invalid source geometry
 is rejected unless the existing explicit, audited repair policy succeeds.
 

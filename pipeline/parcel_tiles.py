@@ -177,16 +177,29 @@ def validate_optimized(root, manifest):
             count += 1
     assert seen == keys, f'Missing maxzoom parcel identities: {sorted(keys-seen)}'
     # Reassemble maxzoom pieces independently, including holes and disjoint parts.
-    # Permit only render-grid rounding, never invented boundaries or missing pieces.
+    # Grid rounding may remove a long, narrower-than-grid spike. Comparing full
+    # boundaries with a Hausdorff threshold incorrectly rejects such subpixel
+    # topology changes. Check both eroded interiors instead: no area wider than
+    # one grid unit, including hole interiors, may be missing or invented.
     tolerance = 2*HALF_WORLD/(2**HIGH*EXTENT)  # one grid unit in projected meters
+    subpixel_changes = 0; max_subpixel_area = 0.0
     for key, geometry in exact.items():
         rendered = unary_union(pieces[key])
         assert rendered.is_valid and not rendered.is_empty, key
-        assert geometry.difference(rendered.buffer(tolerance)).area < 1e-5, ('missing tile geometry',key)
-        assert rendered.difference(geometry.buffer(tolerance)).area < 1e-5, ('invented tile geometry',key)
+        missing = geometry.buffer(-tolerance).difference(rendered).area
+        invented = rendered.buffer(-tolerance).difference(geometry).area
+        assert missing < 1e-5 and invented < 1e-5, ('tile geometry outside render-grid budget',key,missing,invented)
+        delta = geometry.symmetric_difference(rendered).area
+        assert delta <= tolerance*(geometry.length+rendered.length), ('excessive render-grid area change',key,delta)
+        # Report subpixel slivers beyond a simple boundary-distance check.
+        subpixel_area = geometry.difference(rendered.buffer(tolerance)).area + rendered.difference(geometry.buffer(tolerance)).area
+        if subpixel_area > 1e-5:
+            subpixel_changes += 1; max_subpixel_area = max(max_subpixel_area, subpixel_area)
     return {'tiles': count, 'max_uncompressed_tile_bytes': max_bytes, 'parcel_count': len(keys),
             'sqlite_integrity': 'PASS', 'fingerprints': 'PASS', 'tile_identities': 'PASS',
             'reassembled_maxzoom_geometry': 'PASS', 'maxzoom_grid_meters_web_mercator': tolerance,
+            'subpixel_sliver_parcel_count': subpixel_changes,
+            'max_subpixel_sliver_area_m2_web_mercator': max_subpixel_area,
             'overview_simplification': 'half a 512-pixel tile pixel; topology preserving; none at zoom 16',
             'subpixel_geometry': 'Render-grid rounding can collapse subpixel parts. All unquantized parts/holes remain in SQLite; all parcel identities must survive at maximum zoom.'}
 

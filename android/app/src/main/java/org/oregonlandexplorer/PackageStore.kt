@@ -118,7 +118,11 @@ class PackageStore(private val context: Context) {
             dir.isDirectory && runCatching { JSONObject(File(dir,"manifest.json").readText()).getString("id")==id }.getOrDefault(false)
         } ?: emptyList()
         commit(r)
-        for(version in versions) check(version.deleteRecursively()) { "Package disabled but some files could not be removed" }
+        for(version in versions) {
+            val derived=File(File(context.filesDir,"parcel-indexes"),sha(File(version,"manifest.json"))+".sqlite")
+            check(version.deleteRecursively()) { "Package disabled but some files could not be removed" }
+            if(derived.exists()) check(derived.delete()) { "Package removed but its derived index could not be removed" }
+        }
     }
     private fun hasActiveVector(r: JSONObject)=r.keys().asSequence().any { id ->
         val record=r.getJSONObject(id)
@@ -142,6 +146,7 @@ class PackageStore(private val context: Context) {
             require(expected.matches(Regex("[a-f0-9]{64}")) && sha(File(dir,name))==expected) { "Checksum mismatch: $name" }
         }
         val kind=if(m.getInt("schema_version")==1) "legacy" else m.getString("kind")
+        require(m.getInt("schema_version")!=3 || kind=="parcels") { "Schema 3 is reserved for optimized parcels" }
         require(kind in listOf("legacy","vector","parcels","aerial")) { "Unsupported package kind" }
         if(kind in listOf("legacy","parcels")) {
             require(files.containsAll(if(m.getInt("schema_version")==3) listOf("parcels.pmtiles","parcels.sqlite","source-record-hashes.json","source-metadata.json") else listOf("parcels.geojson","source-record-hashes.json","source-metadata.json")))
@@ -184,6 +189,7 @@ class PackageStore(private val context: Context) {
 
 class MapPackage(val directory: File,val enabled: Boolean) {
     val manifest=JSONObject(File(directory,"manifest.json").readText())
+    val payloadBytes: Long=directory.listFiles()?.filter { it.isFile }?.sumOf { it.length() } ?: 0L
     val id: String get()=manifest.getString("id")
     val kind: String get()=if(manifest.getInt("schema_version")==1) "legacy" else manifest.getString("kind")
     fun contains(lat: Double,lon: Double): Boolean { val b=manifest.getJSONArray("bbox");return lon in b.getDouble(0)..b.getDouble(2) && lat in b.getDouble(1)..b.getDouble(3) }
