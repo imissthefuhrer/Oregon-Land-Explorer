@@ -1,0 +1,216 @@
+{
+  "measurement_run": 43630083953,
+  "optimized_source_commit": "bcdaa8d0c8b818dede9f618cf3dfaaf52a19fd24",
+  "baseline_source_commit": "e61cbef399f376f8d7f68fb48f8eb17c455d5a7f",
+  "comparison": [
+    {
+      "scenario": "original",
+      "baseline_pss_kib": 140838,
+      "optimized_pss_kib": 124559,
+      "reduction_percent": 11.56,
+      "baseline_java_alloc_bytes": 9314864,
+      "optimized_java_alloc_bytes": 7584944,
+      "baseline_native_alloc_bytes": 68869008,
+      "optimized_native_alloc_bytes": 31134464,
+      "baseline_popup_median_ms": 851,
+      "optimized_popup_median_ms": 811,
+      "optimized_lookup_to_ui_median_ms": 5,
+      "baseline_complete_frame_median_ms": 481,
+      "optimized_complete_frame_median_ms": 415,
+      "baseline_native_fps_mean": 16.890965051167456,
+      "optimized_native_fps_mean": 20.32391867643019,
+      "optimized_internal_data_bytes_all_versions_and_indexes": 168093813,
+      "optimized_navigation_pss_min_max_kib": [
+        124033,
+        124033
+      ],
+      "optimized_navigation_first_last_pss_kib": [
+        124033,
+        124033
+      ],
+      "optimized_navigation_tail_pss_mib_per_minute": null,
+      "optimized_navigation_last_ten_pss_kib": [
+        124033
+      ],
+      "optimized_navigation_first_last_native_alloc_bytes": [
+        30082672,
+        30082672
+      ],
+      "optimized_navigation_first_last_java_alloc_bytes": [
+        7584944,
+        7584944
+      ]
+    },
+    {
+      "scenario": "gervais",
+      "baseline_pss_kib": 493678,
+      "optimized_pss_kib": 123891,
+      "reduction_percent": 74.9,
+      "baseline_java_alloc_bytes": 102616336,
+      "optimized_java_alloc_bytes": 5719504,
+      "baseline_native_alloc_bytes": 341294528,
+      "optimized_native_alloc_bytes": 31447808,
+      "baseline_popup_median_ms": 854,
+      "optimized_popup_median_ms": 863,
+      "optimized_lookup_to_ui_median_ms": 6,
+      "baseline_complete_frame_median_ms": 413,
+      "optimized_complete_frame_median_ms": 168,
+      "baseline_native_fps_mean": 15.923059424788827,
+      "optimized_native_fps_mean": 13.269569914681096,
+      "optimized_internal_data_bytes_all_versions_and_indexes": 168282228,
+      "optimized_navigation_pss_min_max_kib": [
+        122802,
+        122802
+      ],
+      "optimized_navigation_first_last_pss_kib": [
+        122802,
+        122802
+      ],
+      "optimized_navigation_tail_pss_mib_per_minute": null,
+      "optimized_navigation_last_ten_pss_kib": [
+        122802
+      ],
+      "optimized_navigation_first_last_native_alloc_bytes": [
+        29266448,
+        29266448
+      ],
+      "optimized_navigation_first_last_java_alloc_bytes": [
+        5719504,
+        5719504
+      ]
+    },
+    {
+      "scenario": "silver",
+      "baseline_pss_kib": 219962,
+      "optimized_pss_kib": 122596,
+      "reduction_percent": 44.26,
+      "baseline_java_alloc_bytes": 32386688,
+      "optimized_java_alloc_bytes": 5849088,
+      "baseline_native_alloc_bytes": 105655456,
+      "optimized_native_alloc_bytes": 29412368,
+      "baseline_popup_median_ms": 810,
+      "optimized_popup_median_ms": 846,
+      "optimized_lookup_to_ui_median_ms": 4,
+      "baseline_complete_frame_median_ms": 694,
+      "optimized_complete_frame_median_ms": 120,
+      "baseline_native_fps_mean": 15.631469905551741,
+      "optimized_native_fps_mean": 19.956490230373767,
+      "optimized_internal_data_bytes_all_versions_and_indexes": 168343668,
+      "optimized_navigation_pss_min_max_kib": [
+        123372,
+        123372
+      ],
+      "optimized_navigation_first_last_pss_kib": [
+        123372,
+        123372
+      ],
+      "optimized_navigation_tail_pss_mib_per_minute": null,
+      "optimized_navigation_last_ten_pss_kib": [
+        123372
+      ],
+      "optimized_navigation_first_last_native_alloc_bytes": [
+        30022416,
+        30022416
+      ],
+      "optimized_navigation_first_last_java_alloc_bytes": [
+        5849088,
+        5849088
+      ]
+    },
+    {
+      "scenario": "both",
+      "baseline_pss_kib": 2110752,
+      "optimized_pss_kib": 132761,
+      "reduction_percent": 93.71,
+      "baseline_java_alloc_bytes": 129377104,
+      "optimized_java_alloc_bytes": 7852336,
+      "baseline_native_alloc_bytes": 2006455408,
+      "optimized_native_alloc_bytes": 33746720,
+      "baseline_popup_median_ms": 824,
+      "optimized_popup_median_ms": 902,
+      "optimized_lookup_to_ui_median_ms": 5,
+      "baseline_complete_frame_median_ms": 406,
+      "optimized_complete_frame_median_ms": 168,
+      "baseline_native_fps_mean": 23.399424585408074,
+      "optimized_native_fps_mean": 26.108101136160087,
+      "optimized_internal_data_bytes_all_versions_and_indexes": 168360051,
+      "optimized_navigation_pss_min_max_kib": [
+        126041,
+        134892
+      ],
+      "optimized_navigation_first_last_pss_kib": [
+        129173,
+        131081
+      ],
+      "optimized_navigation_tail_pss_mib_per_minute": -1.4261070209392326,
+      "optimized_navigation_last_ten_pss_kib": [
+        128804,
+        128928,
+        129128,
+        129868,
+        129640,
+        130488,
+        131173,
+        131093,
+        131549,
+        131081
+      ],
+      "optimized_navigation_first_last_native_alloc_bytes": [
+        31200416,
+        30819408
+      ],
+      "optimized_navigation_first_last_java_alloc_bytes": [
+        8590304,
+        7786800
+      ]
+    }
+  ],
+  "cold_activity_total_ms": {
+    "baseline": [
+      1023,
+      1155,
+      847
+    ],
+    "optimized": [
+      701,
+      932,
+      933
+    ],
+    "upgraded-legacy": [
+      951,
+      843,
+      765
+    ]
+  },
+  "map_readiness_ms": [
+    {
+      "scenario": "original",
+      "baseline_activity_ready": 1543,
+      "optimized_activity_ready": 1408,
+      "baseline_first_complete_frame": 2033,
+      "optimized_first_complete_frame": 1893
+    },
+    {
+      "scenario": "gervais",
+      "baseline_activity_ready": 2746,
+      "optimized_activity_ready": 1020,
+      "baseline_first_complete_frame": 3162,
+      "optimized_first_complete_frame": 1200
+    },
+    {
+      "scenario": "silver",
+      "baseline_activity_ready": 1532,
+      "optimized_activity_ready": 1226,
+      "baseline_first_complete_frame": 2226,
+      "optimized_first_complete_frame": 1346
+    },
+    {
+      "scenario": "both",
+      "baseline_activity_ready": 3156,
+      "optimized_activity_ready": 1067,
+      "baseline_first_complete_frame": 3566,
+      "optimized_first_complete_frame": 1266
+    }
+  ],
+  "limits": "Instrumentation PSS includes the test runner. Same process per variant; startup is ActivityScenario creation, not a force-stopped process. Separate shell cold-launch timings accompany this report. Mesa software rendering is not phone GPU evidence."
+}

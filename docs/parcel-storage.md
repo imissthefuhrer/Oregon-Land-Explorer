@@ -1,4 +1,4 @@
-# Disk-backed parcels (Android preview 0.3)
+# Disk-backed parcels (Android preview 0.3.1)
 
 This implementation builds on merged PR #4, final commit `e61cbef`, with the
 unchanged `expanded-v0.2` release as the known-good fallback. It retains MapLibre
@@ -8,7 +8,8 @@ included. [Existing source/data-use safeguards](data-use.md) continue to apply.
 
 ## Installation and update
 
-Use the successful **Offline Android APK** run linked from the optimization PR.
+Use the [verified download run](https://github.com/imissthefuhrer/Oregon-Land-Explorer/actions/runs/43630083953) linked from [PR #6](https://github.com/imissthefuhrer/Oregon-Land-Explorer/pull/6).
+[Measured results and test details](parcel-performance.md) accompany this build.
 Download its `oregon-land-explorer-optimized-preview` artifact and extract the ZIP.
 The artifact contains `app-debug.apk`, five `.olepack` archives and SHA-256 sums.
 Test evidence is a separate `offline-test-evidence` artifact. Artifacts require a
@@ -17,7 +18,7 @@ Do not infer successful testing from the presence of an APK artifact: check the
 job's final result and the performance report.
 
 1. Keep the existing app installed. Install the new APK as an update. Application
-   ID remains `org.oregonlandexplorer.expanded`; version code is 3 and CI uses the
+   ID remains `org.oregonlandexplorer.expanded`; version code is 4 and CI uses the
    existing persistent signing secret. The original prototype remains independent.
 2. Import the new `gervais-countryside.olepack`, `silver-falls.olepack` and
    `gervais-original-parcels.olepack` through **Region → Import .olepack from
@@ -38,7 +39,7 @@ job's final result and the performance report.
 Do not uninstall the app to resolve an update/signature error: that would remove
 its internal data. Retain the installed app and inspect the signing/build evidence.
 The old `expanded-v0.2` APK is preserved, but Android does not normally install an
-older version code over a newer one. Package rollback is available within 0.3;
+older version code over a newer one. Package rollback is available within 0.3.1;
 an APK downgrade is a separate Android operation and is not promised by that menu.
 
 ## Package contract
@@ -96,8 +97,26 @@ off the UI thread. Checksums detect corruption; they do not authenticate a publi
 
 ## Runtime and selection
 
-MapLibre loads visible local vector tiles directly from disk. Panning does not
-rebuild the parcel source. Native old-zoom tile caching is disabled and native
+MapLibre renders visible local vector tiles. `LocalTiles` supplies their bytes
+through the SDK's public `ModuleProvider`/`HttpRequest` interface. Its virtual
+HTTPS identifiers are handled entirely in-process: there is no server, DNS,
+socket, remote fallback or INTERNET permission. The SDK connectivity override
+marks this local transport available in airplane mode; Android's actual network
+state and the app's Offline indicator remain unchanged.
+
+The first tiled build retained MapLibre 12.0.1's built-in PMTiles reader and
+achieved about 160 MiB PSS, but the long trace still grew about 8 MiB/min in native
+allocations. Inspection identified its retained per-request task map, also
+described in [upstream #4832](https://github.com/maplibre/maplibre-native/pull/4832).
+The local adapter avoids that reader while preserving the accepted 12.0.1
+renderer. It uses 127-byte headers, bounded file ranges, a global 8 MiB directory
+LRU, two workers, a 128-request queue and cancellable futures. File handles close
+after each range; no geometry archive is read wholesale. Gzip output and range
+sizes are capped at 4 MiB. Nested-directory and Hilbert/body-hash tests use an
+independent Python PMTiles implementation, including synthetic binary reader
+fixtures that are never part of the delivered map datasets.
+
+Panning does not rebuild the parcel source. Native old-zoom tile caching is disabled and native
 prefetch zoom delta defaults to zero; `PARCEL_PREFETCH_ZOOM_DELTA` is an explicit
 tuning constant. It is a lower-zoom prefetch setting, not a geographic margin.
 The legacy compatibility viewport has a 10% geographic margin, at most 1,000
@@ -114,7 +133,7 @@ tile fragments and regional overlap do not duplicate the same identity.
 Selection and legacy display each use one worker and at most one pending task.
 Separate queues prevent a viewport refresh from discarding a property tap. New camera movement
 invalidates old callbacks and replaces queued work; rapid navigation cannot build
-an unbounded task queue. Reads use short-lived connections; owner records are
+an unbounded task queue. Reads use short-lived connections; schema 3 owner records are
 loaded only for selection. At most 256 spatial candidates are allowed per tap;
 exceptionally dense source overlap is surfaced as an error. Memory-trim callbacks
 reach MapLibre. A missing record or missing download says coverage is unavailable,

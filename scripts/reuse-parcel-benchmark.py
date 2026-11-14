@@ -20,8 +20,8 @@ for path in source.rglob('*instrumentation.txt'):
 for path in source.rglob('*cold*.txt'):
     shutil.copyfile(path,Path('output')/path.name)
 Path('output/performance-provenance.json').write_text(json.dumps({
-    'paired_measurement_run':43621106452,
-    'source_commit':'bb2d616a2d1b490d7ceb9e6f960606a93654db25',
-    'reason':'Reuse passed database tests and paired benchmarks after CI working-directory fix. Git diff guards unchanged production, GIS and benchmark sources; functional UI tests execute again.',
+    'paired_measurement_run':43630083953,
+    'source_commit':'bcdaa8d0c8b818dede9f618cf3dfaaf52a19fd24',
+    'reason':'Reuse completed database/transport tests and paired benchmarks for unchanged production sources. Git diff guards unchanged production, GIS and benchmark sources; functional UI tests execute again.',
 },indent=2))
-print('Retained executed database preflight and both complete paired benchmarks from run 43621106452')
+print('Retained executed database/transport preflight and both complete paired benchmarks from run 43630083953')

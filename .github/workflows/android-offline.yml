@@ -50,8 +50,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if git diff --quiet bb2d616a2d1b490d7ceb9e6f960606a93654db25 HEAD -- android/app/src/main android/app/build.gradle.kts android/build.gradle.kts android/settings.gradle.kts android/gradle.properties android/app/src/androidTest/java/org/oregonlandexplorer/ParcelPerformanceTest.kt android/app/src/androidTest/java/org/oregonlandexplorer/ParcelDatabaseTest.kt pipeline scripts/benchmark-parcels.sh; then
-            gh run download 43621106452 --name offline-test-evidence --dir work/paired-evidence
+          if git diff --quiet bcdaa8d0c8b818dede9f618cf3dfaaf52a19fd24 HEAD -- android/app/src/main android/app/build.gradle.kts android/build.gradle.kts android/settings.gradle.kts android/gradle.properties android/app/src/androidTest/java/org/oregonlandexplorer/ParcelPerformanceTest.kt android/app/src/androidTest/java/org/oregonlandexplorer/ParcelDatabaseTest.kt android/app/src/androidTest/java/org/oregonlandexplorer/LocalTilesTest.kt pipeline scripts/benchmark-parcels.sh; then
+            gh run download 43630083953 --name offline-test-evidence --dir work/paired-evidence
             python scripts/reuse-parcel-benchmark.py work/paired-evidence
             python scripts/summarize-parcel-performance.py
             echo 'reused=true' >> "$GITHUB_OUTPUT"
