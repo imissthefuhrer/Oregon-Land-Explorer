@@ -4,7 +4,7 @@ import json
 import sqlite3
 import pytest
 from pipeline.parcels import fingerprint
-from pipeline.parcel_tiles import build_database, build_tiles, validate_optimized, COUNTY
+from pipeline.parcel_tiles import build_database, build_tiles, validate_optimized, COUNTY, CELL_SCALE
 
 
 def inputs():
@@ -31,6 +31,11 @@ def test_sqlite_exact_holes_identity_attributes_and_spatial_index(tmp_path):
         assert not shape(json.loads(g)).covers(Point(-122.903,45.108))
         assert shape(json.loads(g)).covers(Point(-122.8795,45.1005))
         assert db.execute("SELECT id FROM parcel_bounds WHERE west<=? AND east>=? AND south<=? AND north>=?",(-122.90,-122.90,45.10,45.10)).fetchall()==[(17,)]
+        import math
+        cell=(math.floor(-122.90*CELL_SCALE),math.floor(45.10*CELL_SCALE))
+        assert db.execute('SELECT p.id FROM parcel_cells c JOIN parcels p ON p.id=c.parcel_id WHERE c.cell_x=? AND c.cell_y=?',cell).fetchall()==[(17,)]
+        grid_plan=db.execute('EXPLAIN QUERY PLAN SELECT parcel_id FROM parcel_cells WHERE cell_x=? AND cell_y=?',cell).fetchall()
+        assert any('PRIMARY KEY' in row[-1] for row in grid_plan)
         plan=db.execute('EXPLAIN QUERY PLAN SELECT * FROM parcels WHERE parcel_key=?',(key,)).fetchall()
         assert any('INDEX' in row[-1] for row in plan)
 

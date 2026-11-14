@@ -40,8 +40,11 @@ class MainActivity : AppCompatActivity(), LocationListener {
     private var parcelVisible = true
     private var aerialVisible = false
     private var importing = false
-    private val parcelWork=java.util.concurrent.ThreadPoolExecutor(1,1,0L,java.util.concurrent.TimeUnit.MILLISECONDS,
+    private fun parcelWorker()=java.util.concurrent.ThreadPoolExecutor(1,1,0L,java.util.concurrent.TimeUnit.MILLISECONDS,
         java.util.concurrent.ArrayBlockingQueue<Runnable>(1),java.util.concurrent.ThreadPoolExecutor.DiscardOldestPolicy())
+    private val parcelWork=parcelWorker()
+    // A compatibility viewport refresh must never discard a queued property tap.
+    private val legacyWork=parcelWorker()
     private var parcelGeneration=0L
     private var viewportGeneration=0L
     private var parcelLoadNote=""
@@ -187,7 +190,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
         val dx=(bounds.longitudeEast-bounds.longitudeWest)*LEGACY_PREFETCH_MARGIN
         val dy=(bounds.latitudeNorth-bounds.latitudeSouth)*LEGACY_PREFETCH_MARGIN
         val b=doubleArrayOf(bounds.longitudeWest-dx,bounds.latitudeSouth-dy,bounds.longitudeEast+dx,bounds.latitudeNorth+dy)
-        parcelWork.execute {
+        legacyWork.execute {
             try {
                 val features=installed.legacyViewport(b)
                 runOnUiThread {
@@ -363,7 +366,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
     override fun onResume() { super.onResume(); mapView.onResume(); startGps() }
     override fun onPause() { locations.removeUpdates(this); mapView.onPause(); super.onPause() }
     override fun onStop() { if(networkRegistered) { connectivity.unregisterNetworkCallback(networkCallback); networkRegistered=false }; mapView.onStop(); super.onStop() }
-    override fun onDestroy() { destroyed=true;parcelGeneration++;viewportGeneration++;parcelWork.shutdownNow();mapView.onDestroy();super.onDestroy() }
+    override fun onDestroy() { destroyed=true;parcelGeneration++;viewportGeneration++;parcelWork.shutdownNow();legacyWork.shutdownNow();mapView.onDestroy();super.onDestroy() }
     override fun onTrimMemory(level: Int) { super.onTrimMemory(level);if(level>=android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) mapView.onLowMemory() }
     companion object {
         // Native prefetch is a zoom delta, not a geographic ring. Zero avoids an

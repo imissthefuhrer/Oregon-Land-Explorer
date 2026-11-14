@@ -26,6 +26,7 @@ from .parcels import fingerprint
 
 COUNTY = '41047'  # Census FIPS, Marion County, Oregon; never infer from an owner name.
 LOW, HIGH, EXTENT = 12, 16, 8192
+CELL_SCALE = 100  # 0.01-degree cells, ordinary SQLite indexes on every Android version
 APPLICATION_ID = 0x4F4C4550
 
 
@@ -45,17 +46,21 @@ def build_database(path, data, audit, manifest):
         raise ValueError('Missing, duplicated or mismatched source parcel IDs')
     with sqlite3.connect(path) as db:
         db.executescript(f'''
-            PRAGMA application_id={APPLICATION_ID}; PRAGMA user_version=1;
+            PRAGMA application_id={APPLICATION_ID}; PRAGMA user_version=2;
             CREATE TABLE metadata(key TEXT PRIMARY KEY, value TEXT NOT NULL);
             CREATE TABLE parcels(
               id INTEGER PRIMARY KEY, county TEXT NOT NULL, source_id TEXT NOT NULL,
               parcel_key TEXT NOT NULL UNIQUE, taxlot TEXT, owner TEXT, acres REAL,
               properties TEXT NOT NULL, geometry TEXT NOT NULL, audit TEXT NOT NULL,
               UNIQUE(county, source_id));
-            CREATE VIRTUAL TABLE parcel_bounds USING rtree(id, west, east, south, north);
+            CREATE TABLE parcel_bounds(id INTEGER PRIMARY KEY, west REAL NOT NULL,
+              east REAL NOT NULL, south REAL NOT NULL, north REAL NOT NULL);
+            CREATE TABLE parcel_cells(cell_x INTEGER,cell_y INTEGER,parcel_id INTEGER,
+              PRIMARY KEY(cell_x,cell_y,parcel_id)) WITHOUT ROWID;
+            CREATE INDEX parcel_cell_id ON parcel_cells(parcel_id,cell_x,cell_y);
         ''')
         for key, value in {'county': COUNTY, 'extracted_at': manifest['extracted_at'],
-                           'parcel_source': manifest['parcel_source']}.items():
+                           'parcel_source': manifest['parcel_source'], 'cell_scale': str(CELL_SCALE)}.items():
             db.execute('INSERT INTO metadata VALUES (?,?)', (key, value))
         for feature in data['features']:
             props = feature['properties']; source_id = str(props['OBJECTID'])
@@ -72,8 +77,14 @@ def build_database(path, data, audit, manifest):
                         compact(props), geometry, compact(record)))
             w, s, e, n = geom.bounds
             db.execute('INSERT INTO parcel_bounds VALUES (?,?,?,?,?)', (int(source_id), w, e, s, n))
+            xs=range(math.floor(w*CELL_SCALE),math.floor(e*CELL_SCALE)+1)
+            ys=range(math.floor(s*CELL_SCALE),math.floor(n*CELL_SCALE)+1)
+            if len(xs)*len(ys)>50000:
+                raise ValueError(f'Parcel exceeds spatial-cell budget: {source_id}')
+            db.executemany('INSERT INTO parcel_cells VALUES (?,?,?)',
+                           ((x,y,int(source_id)) for x in xs for y in ys))
         assert db.execute('PRAGMA integrity_check').fetchone()[0] == 'ok'
-        assert db.execute("SELECT rtreecheck('parcel_bounds')").fetchone()[0] == 'ok'
+
         assert db.execute('SELECT count(*) FROM parcel_bounds').fetchone()[0] == len(ids)
 
 
@@ -134,10 +145,10 @@ def validate_optimized(root, manifest):
     """Decode every tile; reconcile exact rows, audit associations and maxzoom IDs."""
     with sqlite3.connect(f'file:{root / "parcels.sqlite"}?mode=ro', uri=True) as db:
         assert db.execute('PRAGMA application_id').fetchone()[0] == APPLICATION_ID
-        assert db.execute('PRAGMA user_version').fetchone()[0] == 1
+        assert db.execute('PRAGMA user_version').fetchone()[0] == 2
         assert db.execute('PRAGMA integrity_check').fetchone()[0] == 'ok'
-        assert db.execute("SELECT rtreecheck('parcel_bounds')").fetchone()[0] == 'ok'
-        keys = set(); exact = {}
+
+        keys = set(); exact = {}; total_cells = 0
         audit = json.loads((root/'source-record-hashes.json').read_text())
         for id, county, sid, key, props, geometry, record in db.execute('SELECT id,county,source_id,parcel_key,properties,geometry,audit FROM parcels'):
             assert county == COUNTY and str(id) == sid and key == county + ':' + sid
@@ -152,10 +163,16 @@ def validate_optimized(root, manifest):
             b = db.execute('SELECT west,south,east,north FROM parcel_bounds WHERE id=?', (id,)).fetchone()
             w,s,e,n = g.bounds
             assert b and b[0] <= w and b[1] <= s and b[2] >= e and b[3] >= n
+            expected_cells=(math.floor(e*CELL_SCALE)-math.floor(w*CELL_SCALE)+1)*(math.floor(n*CELL_SCALE)-math.floor(s*CELL_SCALE)+1)
+            cells=db.execute('SELECT count(*) FROM parcel_cells WHERE parcel_id=? AND cell_x BETWEEN ? AND ? AND cell_y BETWEEN ? AND ?',
+                             (id,math.floor(w*CELL_SCALE),math.floor(e*CELL_SCALE),math.floor(s*CELL_SCALE),math.floor(n*CELL_SCALE))).fetchone()[0]
+            assert cells==expected_cells, ('missing spatial cells',key)
+            total_cells += expected_cells
             keys.add(key)
             exact[key] = transform(mercator, g)
         assert len(keys) == manifest['parcel_count'] == len(audit)
         assert db.execute('SELECT count(*) FROM parcel_bounds').fetchone()[0] == len(keys)
+        assert db.execute('SELECT count(*) FROM parcel_cells').fetchone()[0] == total_cells
     seen = set(); count = 0; max_bytes = 0; pieces = defaultdict(list)
     with (root/'parcels.pmtiles').open('rb') as file:
         for (z,x,y), blob in all_tiles(MmapSource(file)):
@@ -221,5 +238,5 @@ def optimize(root, revision=None):
     config = {k:v for k,v in manifest.items() if k not in ('sha256', 'schema_version', 'kind')}
     config.update(revision=revision if revision is not None else manifest['revision']+1, minzoom=LOW, maxzoom=HIGH,
                   packaged_at=datetime.now(timezone.utc).isoformat(),
-                  parcel_schema='oregon-parcels-v1', county=COUNTY)
+                  parcel_schema='oregon-parcels-v2', county=COUNTY)
     return finish(root, config, 'parcels', schema_version=3)

@@ -2,6 +2,7 @@
 # Run in ONE API-35 Pixel-2 Mesa emulator, offline. Keep installed old data during APK update.
 set -euo pipefail
 mkdir -p output/emulator-screenshots
+trap 'adb pull /sdcard/Download/ole-evidence/. output/emulator-screenshots/ || true' EXIT
 adb shell mkdir -p /sdcard/Download/ole-evidence
 adb shell cmd connectivity airplane-mode enable
 adb shell svc wifi disable
@@ -22,6 +23,7 @@ cold_launches baseline
 adb install -r work/baseline-source/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
 adb shell am instrument -w -r -e class org.oregonlandexplorer.ParcelPerformanceTest -e variant baseline org.oregonlandexplorer.expanded.test/androidx.test.runner.AndroidJUnitRunner | tee output/baseline-instrumentation.txt
 grep -q 'OK (1 test)' output/baseline-instrumentation.txt
+adb pull /sdcard/Download/ole-evidence/. output/emulator-screenshots/
 adb shell am force-stop org.oregonlandexplorer.expanded
 adb uninstall org.oregonlandexplorer.expanded.test
 # This MUST be an in-place update of the same signing identity, with old installed packs retained.

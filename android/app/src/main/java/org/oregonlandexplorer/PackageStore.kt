@@ -152,7 +152,7 @@ class PackageStore(private val context: Context) {
             require(files.containsAll(if(m.getInt("schema_version")==3) listOf("parcels.pmtiles","parcels.sqlite","source-record-hashes.json","source-metadata.json") else listOf("parcels.geojson","source-record-hashes.json","source-metadata.json")))
             if(m.getInt("schema_version")==3) {
                 require(files==setOf("parcels.pmtiles","parcels.sqlite","source-record-hashes.json","source-metadata.json","parcel-validation.json"))
-                require(m.getString("parcel_schema")=="oregon-parcels-v1" && m.getString("county").matches(Regex("[0-9]{5}")))
+                require(m.getString("parcel_schema")=="oregon-parcels-v2" && m.getString("county").matches(Regex("[0-9]{5}")))
                 require(m.getInt("parcel_count") in 1..1000000)
                 ParcelDatabase.validate(File(dir,"parcels.sqlite"),m,deep)
             } else if(deep) {

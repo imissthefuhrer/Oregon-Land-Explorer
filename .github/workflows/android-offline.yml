@@ -45,10 +45,33 @@ jobs:
           mkdir -p work/baseline-source/android/app/src/androidTest/assets/test-packs
           cp work/expanded/*.olepack work/baseline-source/android/app/src/androidTest/assets/test-packs/
           cp android/app/src/androidTest/java/org/oregonlandexplorer/ParcelPerformanceTest.kt work/baseline-source/android/app/src/androidTest/java/org/oregonlandexplorer/
+      - uses: actions/cache/restore@v4
+        id: parcel-cache
+        with:
+          key: optimized-parcels-v2-${{ hashFiles('pipeline/**', 'scripts/verify-expanded-inputs.py') }}
+          path: |
+            output/*/
+            output/*.olepack
+            output/storage.json
+            android/app/src/main/assets/packs/
+            android/app/src/main/assets/glyphs/
+            android/app/src/androidTest/assets/
       - name: Convert identical source extracts to schema 3
+        if: steps.parcel-cache.outputs.cache-hit != 'true'
         run: python -m pipeline.optimize_release --source work/expanded
       - name: Audit exact rows, fingerprints, tile identities, geometry and checksums
         run: python -m pipeline.validate_packages
+      - uses: actions/cache/save@v4
+        if: steps.parcel-cache.outputs.cache-hit != 'true'
+        with:
+          key: optimized-parcels-v2-${{ hashFiles('pipeline/**', 'scripts/verify-expanded-inputs.py') }}
+          path: |
+            output/*/
+            output/*.olepack
+            output/storage.json
+            android/app/src/main/assets/packs/
+            android/app/src/main/assets/glyphs/
+            android/app/src/androidTest/assets/
       - name: Compile app and instrumentation after geometry validation
         working-directory: android
         run: gradle --no-daemon :app:compileDebugKotlin :app:compileDebugAndroidTestKotlin

@@ -43,12 +43,12 @@ an APK downgrade is a separate Android operation and is not promised by that men
 
 ## Package contract
 
-Schema 3, kind `parcels`, `parcel_schema=oregon-parcels-v1` contains exactly:
+Schema 3, kind `parcels`, `parcel_schema=oregon-parcels-v2` contains exactly:
 
 | Payload | Purpose |
 |---|---|
 | `parcels.pmtiles` | Local PMTiles v3, gzipped MVT; stored zooms 12–16, overzoomed through 19 |
-| `parcels.sqlite` | SQLite application ID `0x4f4c4550`, user version 1; exact polygons and metadata |
+| `parcels.sqlite` | SQLite application ID `0x4f4c4550`, user version 2; exact polygons and metadata |
 | `source-record-hashes.json` | Original audited fingerprints, repair reasons and original invalid geometries |
 | `source-metadata.json` | Original service/item provenance |
 | `parcel-validation.json` | Independently decoded tile/SQLite reconciliation report |
@@ -57,7 +57,14 @@ Schema 3, kind `parcels`, `parcel_schema=oregon-parcels-v1` contains exactly:
 SQLite `parcels` has a unique `county,source_id` index and unique `parcel_key`
 (`41047:OBJECTID` for this existing Marion source). It retains tax lot, owner,
 acreage, all original display properties, unquantized display geometry and audit.
-`parcel_bounds` is an R-Tree keyed to the row ID. `metadata` records county, source
+`parcel_bounds` stores exact envelopes keyed to row ID. `parcel_cells` has a
+`(cell_x,cell_y,parcel_id)` primary key, plus an inverse parcel-ID index. Cells are
+0.01° in each direction (about 0.8 × 1.1 km here). A point selects one cell's
+indexed candidates, then filters their exact envelopes and polygons. Grid cells
+do not alter geometry or ownership. The tested stock API 35 SQLite returned
+`no such module: rtree`; ordinary indexed tables avoid an optional native module
+and an additional bundled SQLite dependency. This is an explicit architecture
+choice based on the hosted failure, not a silent runtime fallback. `metadata` records county, source
 and original extraction timestamp. A source service change must explicitly define
 the ID namespace/migration; county alone cannot make unrelated source ID schemes
 equivalent. Future county generators must supply that county's identifier.
@@ -97,14 +104,15 @@ The legacy compatibility viewport has a 10% geographic margin, at most 1,000
 features and 2 MiB of geometry. No whole-region FeatureCollection is retained.
 
 Selection is enabled at zoom 14 and above. At overview zooms the app asks for a
-closer inspection zoom. A tap queries spatial candidates, resolves each compound
+closer inspection zoom. A tap queries indexed spatial candidates, resolves each compound
 identity against the newest enabled installed record, and performs point-in-polygon
 against the exact SQLite geometry. Holes exclude the surrounding property;
 disjoint parts share an identity. A moved newer boundary cannot resurrect an older
 owner at the old location. Actual overlapping tax lots offer a chooser; repeated
 tile fragments and regional overlap do not duplicate the same identity.
 
-Database work uses one worker and at most one pending task. New camera movement
+Selection and legacy display each use one worker and at most one pending task.
+Separate queues prevent a viewport refresh from discarding a property tap. New camera movement
 invalidates old callbacks and replaces queued work; rapid navigation cannot build
 an unbounded task queue. Reads use short-lived connections; owner records are
 loaded only for selection. At most 256 spatial candidates are allowed per tap;
