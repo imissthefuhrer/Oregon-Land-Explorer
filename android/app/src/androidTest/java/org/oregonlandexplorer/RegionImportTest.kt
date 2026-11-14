@@ -19,7 +19,6 @@ import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.After
-import androidx.test.uiautomator.StaleObjectException
 import org.junit.runner.RunWith
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
@@ -50,19 +49,22 @@ class RegionImportTest {
         context.contentResolver.openOutputStream(uri)!!.bufferedWriter().use { it.write(text) }
     }
     private fun clickSystemText(text: String) {
-        val deadline=SystemClock.elapsedRealtime()+15000
-        while(SystemClock.elapsedRealtime()<deadline) {
-            try {
-                device.waitForIdle(1500)
-                val node=device.findObject(By.text(text))
-                if(node!=null) {
-                    val bounds=node.visibleBounds
-                    if(device.click(bounds.centerX(),bounds.centerY())) return
-                }
-            } catch(stale: StaleObjectException) { /* Reacquire after DocumentsUI list refresh. */ }
-            Thread.sleep(250)
-        }
-        fail("Cannot click system document item: $text")
+        // DocumentsUI can replace rows during indexing. UiObject resolves its
+        // selector afresh for each click; UiObject2 retains a stale node.
+        val configuration=androidx.test.uiautomator.Configurator.getInstance()
+        val idleTimeout=configuration.waitForIdleTimeout
+        configuration.setWaitForIdleTimeout(0)
+        try {
+            val deadline=SystemClock.elapsedRealtime()+30000
+            while(SystemClock.elapsedRealtime()<deadline) {
+                try {
+                    val node=device.findObject(androidx.test.uiautomator.UiSelector().text(text))
+                    if(node.waitForExists(1000) && node.click()) return
+                } catch(missing: androidx.test.uiautomator.UiObjectNotFoundException) { /* Reacquire current row. */ }
+                Thread.sleep(200)
+            }
+            fail("Cannot click system document item: $text")
+        } finally { configuration.setWaitForIdleTimeout(idleTimeout) }
     }
     @After fun collectSystemUi() {
         device.executeShellCommand("screencap -p /sdcard/Download/ole-evidence/final-system-ui.png")

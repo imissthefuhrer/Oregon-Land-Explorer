@@ -35,6 +35,17 @@ jobs:
               shutil.copyfile(path,Path('output')/path.name)
           PY
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$BENCHMARK_RUN" > output/measurement-run.json
+      - name: Inspect previous DocumentsUI failure evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download 43625467248 --name offline-test-evidence --dir work/picker-diagnostics
+          python - <<'PY'
+          from pathlib import Path
+          for path in Path('work/picker-diagnostics').rglob('*system-ui*.xml'):
+              print('DIAGNOSTIC_HIERARCHY',path.name)
+              print(path.read_text())
+          PY
       - run: python3 scripts/summarize-parcel-performance.py
       - uses: actions/upload-artifact@v4
         with:
