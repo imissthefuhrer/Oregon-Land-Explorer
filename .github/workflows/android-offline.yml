@@ -52,15 +52,18 @@ jobs:
         run: python -m pipeline.optimize_release --source work/expanded
       - name: Audit exact rows, fingerprints, tile identities, geometry and checksums
         run: python -m pipeline.validate_packages
-      - name: Compile identical benchmark against unchanged PR 4
-        working-directory: work/baseline-source/android
-        run: gradle --no-daemon :app:assembleDebugAndroidTest
       - name: Restore stable expanded-app signing key
         env:
           OLE_SIGNING_KEY: ${{ secrets.OLE_SIGNING_KEY }}
         run: |
           test -n "$OLE_SIGNING_KEY"
           echo "$OLE_SIGNING_KEY" | base64 --decode > "$RUNNER_TEMP/ole-signing.p12"
+      - name: Compile identical benchmark against unchanged PR 4
+        working-directory: work/baseline-source/android
+        env:
+          OLE_KEYSTORE: ${{ runner.temp }}/ole-signing.p12
+          OLE_STORE_PASSWORD: ${{ secrets.OLE_STORE_PASSWORD }}
+        run: gradle --no-daemon :app:assembleDebugAndroidTest
       - name: Build signed APK, instrumentation APK, and lint
         working-directory: android
         env:

@@ -18,9 +18,9 @@ object ParcelDatabase {
     private const val SPATIAL = " FROM parcel_bounds b JOIN parcels p ON p.id=b.id WHERE b.west<=? AND b.east>=? AND b.south<=? AND b.north>=?"
 
     fun open(file: File): SQLiteDatabase = SQLiteDatabase.openDatabase(file.path,null,SQLiteDatabase.OPEN_READONLY or SQLiteDatabase.NO_LOCALIZED_COLLATORS).apply {
-        execSQL("PRAGMA cache_size=-1024")
-        execSQL("PRAGMA mmap_size=0")
-        execSQL("PRAGMA query_only=ON")
+        rawQuery("PRAGMA cache_size=-1024",null).use { it.moveToFirst() }
+        rawQuery("PRAGMA mmap_size=0",null).use { it.moveToFirst() }
+        rawQuery("PRAGMA query_only=ON",null).use { it.moveToFirst() }
     }
 
     fun validate(file: File, manifest: JSONObject, deep: Boolean) {
@@ -132,7 +132,7 @@ object ParcelDatabase {
         val stage=File(cache,".staging-${UUID.randomUUID()}.sqlite")
         try {
             SQLiteDatabase.openOrCreateDatabase(stage,null).use { db ->
-                db.execSQL("PRAGMA journal_mode=DELETE")
+                db.rawQuery("PRAGMA journal_mode=DELETE",null).use { it.moveToFirst() }
                 db.execSQL("CREATE TABLE parcels(id INTEGER PRIMARY KEY,parcel_key TEXT NOT NULL UNIQUE,properties TEXT NOT NULL,geometry TEXT NOT NULL)")
                 db.execSQL("CREATE VIRTUAL TABLE parcel_bounds USING rtree(id,west,east,south,north)")
                 db.beginTransaction()
@@ -145,7 +145,7 @@ object ParcelDatabase {
                             "features" -> {
                                 require(!collection);collection=true;reader.beginArray()
                                 while(reader.hasNext()) {
-                                    val f=readValue(reader,0) as JSONObject
+                                    val f=readValue(reader,0,intArrayOf(0)) as JSONObject
                                     require(f.getString("type")=="Feature")
                                     val props=f.getJSONObject("properties");val g=f.getJSONObject("geometry")
                                     val b=bounds(g);val id=props.getLong("OBJECTID")
@@ -169,13 +169,14 @@ object ParcelDatabase {
         } finally { stage.delete();File(stage.path+"-journal").delete() }
     }
 
-    private fun readValue(reader: JsonReader, depth: Int): Any {
+    private fun readValue(reader: JsonReader, depth: Int, budget: IntArray): Any {
+        require(++budget[0]<=600000) { "Parcel decode budget exceeded" }
         require(depth<16) { "Excessively nested parcel data" }
         return when(reader.peek()) {
             JsonToken.BEGIN_OBJECT -> JSONObject().also { obj ->
-                reader.beginObject();while(reader.hasNext()) { val name=reader.nextName();require(!obj.has(name));obj.put(name,readValue(reader,depth+1)) };reader.endObject()
+                reader.beginObject();while(reader.hasNext()) { val name=reader.nextName();require(!obj.has(name));obj.put(name,readValue(reader,depth+1,budget)) };reader.endObject()
             }
-            JsonToken.BEGIN_ARRAY -> JSONArray().also { array -> reader.beginArray();while(reader.hasNext()) { require(array.length()<500000);array.put(readValue(reader,depth+1)) };reader.endArray() }
+            JsonToken.BEGIN_ARRAY -> JSONArray().also { array -> reader.beginArray();while(reader.hasNext()) { require(array.length()<500000);array.put(readValue(reader,depth+1,budget)) };reader.endArray() }
             JsonToken.NULL -> { reader.nextNull();JSONObject.NULL }
             JsonToken.BOOLEAN -> reader.nextBoolean()
             JsonToken.NUMBER -> { val s=reader.nextString();s.toLongOrNull() ?: s.toDouble().also { require(it.isFinite()) } }

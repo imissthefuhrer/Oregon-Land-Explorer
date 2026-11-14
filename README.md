@@ -8,13 +8,19 @@ aerial imagery is optional. No login, server or runtime internet permission.
 Built directly on the physically tested PR #3 implementation. **Oregon Land
 Explorer Expanded** installs beside that prototype and preserves it.
 
-**Download:** [Expanded Android v0.2 preview](https://github.com/imissthefuhrer/Oregon-Land-Explorer/releases/tag/expanded-v0.2).
+**Known-good fallback:** [Expanded Android v0.2 preview](https://github.com/imissthefuhrer/Oregon-Land-Explorer/releases/tag/expanded-v0.2).
 Install `oregon-land-explorer-expanded.apk`, then choose **Region → Import .olepack
 from Downloads** for the two larger parcel regions or optional aerial. The vector
 corridor is already bundled. ARM64 and x86_64; declared minimum Android 8,
 verified on an Android 15 emulator. The expanded build still needs phone testing.
 
 [Measured storage, source coverage, performance and executed tests](docs/offline-comparison.md).
+
+The [disk-backed parcel update (PR #6)](https://github.com/imissthefuhrer/Oregon-Land-Explorer/pull/6)
+uses local vector PMTiles plus indexed SQLite, retaining exact on-demand property
+selection and compatibility with existing downloads. [Installation, package
+schema, benchmark reproduction and county scaling](docs/parcel-storage.md).
+Check that PR's final hosted test result before installing its preview artifacts.
 
 - [Android installation, import, coverage, architecture and test scope](docs/offline-android.md)
 - [Data sources, attribution and source limitations](docs/data-use.md)

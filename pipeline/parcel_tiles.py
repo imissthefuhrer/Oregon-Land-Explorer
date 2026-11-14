@@ -8,6 +8,8 @@ import gzip
 import json
 import math
 import sqlite3
+from collections import defaultdict
+from datetime import datetime, timezone
 from pathlib import Path
 
 import mapbox_vector_tile
@@ -15,7 +17,7 @@ from pmtiles.reader import MmapSource, all_tiles
 from pmtiles.writer import Writer
 from pmtiles.tile import zxy_to_tileid, TileType, Compression
 from shapely.geometry import shape, mapping, box
-from shapely.ops import transform
+from shapely.ops import transform, unary_union
 from shapely.strtree import STRtree
 from shapely import set_precision
 
@@ -135,7 +137,7 @@ def validate_optimized(root, manifest):
         assert db.execute('PRAGMA user_version').fetchone()[0] == 1
         assert db.execute('PRAGMA integrity_check').fetchone()[0] == 'ok'
         assert db.execute("SELECT rtreecheck('parcel_bounds')").fetchone()[0] == 'ok'
-        keys = set()
+        keys = set(); exact = {}
         audit = json.loads((root/'source-record-hashes.json').read_text())
         for id, county, sid, key, props, geometry, record in db.execute('SELECT id,county,source_id,parcel_key,properties,geometry,audit FROM parcels'):
             assert county == COUNTY and str(id) == sid and key == county + ':' + sid
@@ -151,9 +153,10 @@ def validate_optimized(root, manifest):
             w,s,e,n = g.bounds
             assert b and b[0] <= w and b[1] <= s and b[2] >= e and b[3] >= n
             keys.add(key)
+            exact[key] = transform(mercator, g)
         assert len(keys) == manifest['parcel_count'] == len(audit)
         assert db.execute('SELECT count(*) FROM parcel_bounds').fetchone()[0] == len(keys)
-    seen = set(); count = 0; max_bytes = 0
+    seen = set(); count = 0; max_bytes = 0; pieces = defaultdict(list)
     with (root/'parcels.pmtiles').open('rb') as file:
         for (z,x,y), blob in all_tiles(MmapSource(file)):
             raw = gzip.decompress(blob); max_bytes = max(max_bytes, len(raw))
@@ -168,13 +171,27 @@ def validate_optimized(root, manifest):
                     assert not g.is_empty and g.is_valid, (z,x,y,key)
                     if layer == 'parcels' and z == HIGH:
                         seen.add(key)
+                        w,s,e,n = tile_bounds(z,x,y)
+                        unit = (e-w)/EXTENT
+                        pieces[key].append(transform(lambda a,b,z=None: (w+a*unit,s+b*unit), g))
             count += 1
     assert seen == keys, f'Missing maxzoom parcel identities: {sorted(keys-seen)}'
+    # Reassemble maxzoom pieces independently, including holes and disjoint parts.
+    # Permit only render-grid rounding, never invented boundaries or missing pieces.
+    tolerance = 2*HALF_WORLD/(2**HIGH*EXTENT)  # one grid unit in projected meters
+    for key, geometry in exact.items():
+        rendered = unary_union(pieces[key])
+        assert rendered.is_valid and not rendered.is_empty, key
+        assert geometry.difference(rendered.buffer(tolerance)).area < 1e-5, ('missing tile geometry',key)
+        assert rendered.difference(geometry.buffer(tolerance)).area < 1e-5, ('invented tile geometry',key)
     return {'tiles': count, 'max_uncompressed_tile_bytes': max_bytes, 'parcel_count': len(keys),
-            'sqlite_integrity': 'PASS', 'fingerprints': 'PASS', 'tile_identities': 'PASS'}
+            'sqlite_integrity': 'PASS', 'fingerprints': 'PASS', 'tile_identities': 'PASS',
+            'reassembled_maxzoom_geometry': 'PASS', 'maxzoom_grid_meters_web_mercator': tolerance,
+            'overview_simplification': 'half a 512-pixel tile pixel; topology preserving; none at zoom 16',
+            'subpixel_geometry': 'Render-grid rounding can collapse subpixel parts. All unquantized parts/holes remain in SQLite; all parcel identities must survive at maximum zoom.'}
 
 
-def optimize(root):
+def optimize(root, revision=None):
     """Convert an audited schema-2 directory; never refetch or change source dates."""
     from .packages import finish
     root = Path(root)
@@ -188,6 +205,7 @@ def optimize(root):
     # The exact geometry is now in SQLite; the source archive is retained separately.
     (root/'parcels.geojson').unlink()
     config = {k:v for k,v in manifest.items() if k not in ('sha256', 'schema_version', 'kind')}
-    config.update(revision=manifest['revision']+1, minzoom=LOW, maxzoom=HIGH,
+    config.update(revision=revision if revision is not None else manifest['revision']+1, minzoom=LOW, maxzoom=HIGH,
+                  packaged_at=datetime.now(timezone.utc).isoformat(),
                   parcel_schema='oregon-parcels-v1', county=COUNTY)
     return finish(root, config, 'parcels', schema_version=3)
