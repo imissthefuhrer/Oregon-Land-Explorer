@@ -38,9 +38,9 @@
     "maxzoom": 15,
     "basezoom": 15,
     "include_ids": true,
-    "combine_below": 12,
     "name": "Oregon outdoor v1",
     "version": "1",
-    "compress": "gzip"
+    "compress": "gzip",
+    "description": "Offline roads, trails, woodland, parks and water for the Gervais\u2013Silver Falls corridor"
   }
 }

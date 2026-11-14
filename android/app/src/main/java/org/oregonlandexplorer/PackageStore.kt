@@ -26,11 +26,15 @@ class PackageStore(private val context: Context) {
         val r=registry()
         return r.keys().asSequence().map { id ->
             val record=r.getJSONObject(id)
-            MapPackage(File(root,record.getString("current")),record.optBoolean("enabled",true))
+            MapPackage(File(root,record.getString("current")),record.optBoolean("enabled",true)).also { pack ->
+                validate(pack.directory,pack.manifest,pack.directory.list()!!.toSet())
+            }
         }.sortedBy { it.manifest.getString("name") }.toList()
     }
     @Synchronized fun installBundled() {
+        val installed=registry()
         for(name in context.assets.list("packs") ?: emptyArray()) {
+            if(installed.has(name.removeSuffix(".olepack"))) continue
             context.assets.open("packs/$name").use { importPackage(it,true) }
         }
     }
@@ -89,6 +93,13 @@ class PackageStore(private val context: Context) {
         validate(candidate.directory,candidate.manifest,candidate.directory.list()!!.toSet())
         record.put("previous",record.getString("current")).put("current",old);commit(r)
     }
+    @Synchronized fun remove(id: String) {
+        require(id !in setOf("willamette-silver-outdoors","gervais-original-parcels")) { "Core maps are retained" }
+        val r=registry()
+        val versions=root.listFiles()?.filter { it.isDirectory && it.name.startsWith("$id-") } ?: emptyList()
+        r.remove(id);commit(r)
+        for(version in versions) check(version.deleteRecursively()) { "Package disabled but some files could not be removed" }
+    }
     fun hasPrevious(id: String)=registry().getJSONObject(id).has("previous")
 
     private fun validate(dir: File,m: JSONObject,seen: Set<String>) {
@@ -131,6 +142,7 @@ class PackageStore(private val context: Context) {
             }
             require(FeatureCollection.fromJson(data.toString()).features()?.size==features.length())
         }
+        if(kind=="vector") require(m.getString("tile_schema")=="oregon-outdoor-v1") { "Unsupported outdoor tile schema" }
         if(kind in listOf("legacy","vector","aerial")) {
             val low=m.getInt("minzoom");val high=m.getInt("maxzoom");require(low in 0..high && high<=18)
             val name=if(kind=="vector") "basemap.pmtiles" else "aerial.pmtiles"
@@ -139,7 +151,7 @@ class PackageStore(private val context: Context) {
                 require(f.length()>=127);val header=ByteArray(127);f.readFully(header)
                 require(String(header.copyOfRange(0,7),Charsets.US_ASCII)=="PMTiles" && header[7].toInt()==3) { "Invalid PMTiles v3 header" }
                 val h=java.nio.ByteBuffer.wrap(header).order(java.nio.ByteOrder.LITTLE_ENDIAN)
-                for(offset in listOf(8,24,40,56)) { val start=h.getLong(offset);val length=h.getLong(offset+8);require(start>=127 && length>=0 && start<=f.length() && length<=f.length()-start) { "Invalid PMTiles offsets" } }
+                for(offset in listOf(8,24,40,56)) { val start=h.getLong(offset);val length=h.getLong(offset+8);require(length>=0 && ((length==0L && start==0L) || (start>=127 && start<=f.length() && length<=f.length()-start))) { "Invalid PMTiles offsets" } }
                 require(header[99].toInt()==(if(kind=="vector") 1 else 2)) { "Wrong PMTiles tile type" }
                 require(header[100].toInt()==low && header[101].toInt()==high) { "PMTiles zooms disagree with manifest" }
             }

@@ -107,7 +107,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
         ready=false
         val camera=map?.cameraPosition
         map?.setMinZoomPreference(installed.manifest.getInt("minzoom").toDouble())
-        map?.setMaxZoomPreference((installed.manifest.getInt("maxzoom")+2).toDouble())
+        map?.setMaxZoomPreference(19.0)
         map?.setStyle(Style.Builder().fromJson(installed.style(aerialVisible))) { style ->
             style.addSource(GeoJsonSource("parcels", installed.parcels))
             style.addLayer(FillLayer("parcel-fill", "parcels").withProperties(fillColor("#ffb547"), fillOpacity(0.025f)))
@@ -187,16 +187,20 @@ class MainActivity : AppCompatActivity(), LocationListener {
             .setItems(packs.map { "${if(it.enabled) "✓" else "○"} ${it.manifest.getString("name")}" }.toTypedArray()) { _, index ->
                 val pack=packs[index];val actions=mutableListOf(if(pack.enabled) "Disable" else "Enable", "Show coverage")
                 if(installed.store.hasPrevious(pack.id)) actions.add("Restore previous version")
+                if(pack.id !in setOf("willamette-silver-outdoors","gervais-original-parcels")) actions.add("Delete downloaded package")
                 androidx.appcompat.app.AlertDialog.Builder(this).setTitle(pack.manifest.getString("name"))
                     .setItems(actions.toTypedArray()) { _, action ->
-                        when(action) {
-                            0 -> {
+                        when(actions[action]) {
+                            "Disable", "Enable" -> {
                                 if(pack.enabled && pack.kind=="vector" && packs.count { it.enabled && it.kind=="vector" }==1) {
                                     Toast.makeText(this,"Keep at least one vector basemap enabled",Toast.LENGTH_LONG).show()
                                 } else reloadPackages { installed.store.setEnabled(pack.id,!pack.enabled) }
                             }
-                            1 -> { val b=pack.manifest.getJSONArray("bbox");go((b.getDouble(1)+b.getDouble(3))/2,(b.getDouble(0)+b.getDouble(2))/2,13.0) }
-                            2 -> reloadPackages { installed.store.rollback(pack.id) }
+                            "Show coverage" -> { val b=pack.manifest.getJSONArray("bbox");go((b.getDouble(1)+b.getDouble(3))/2,(b.getDouble(0)+b.getDouble(2))/2,13.0) }
+                            "Restore previous version" -> reloadPackages { installed.store.rollback(pack.id) }
+                            "Delete downloaded package" -> androidx.appcompat.app.AlertDialog.Builder(this)
+                                .setTitle("Delete downloaded package?").setMessage("Delete ${pack.manifest.getString("name")} and its retained versions from this app? You can import it again later.")
+                                .setNegativeButton("Cancel",null).setPositiveButton("Delete") { _, _ -> reloadPackages { installed.store.remove(pack.id) } }.show()
                         }
                     }.show()
             }.show()

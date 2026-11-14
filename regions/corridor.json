@@ -6,7 +6,7 @@
   "maxzoom": 15,
   "revision": 1,
   "parcel_regions": [
-    {"id": "gervais-countryside", "name": "Gervais, St. Louis Ponds & Willamette Mission parcels", "bbox": [-123.06, 45.015, -122.80, 45.22], "max_parcels": 20000},
+    {"id": "gervais-countryside", "name": "Gervais, St. Louis Ponds & Willamette Mission parcels", "bbox": [-123.10, 45.015, -122.80, 45.22], "max_parcels": 20000},
     {"id": "silver-falls", "name": "Silver Falls & approaches parcels", "bbox": [-122.76, 44.80, -122.48, 45.02], "max_parcels": 15000}
   ],
   "targets": [

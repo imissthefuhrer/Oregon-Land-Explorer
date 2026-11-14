@@ -14,6 +14,8 @@ import androidx.test.uiautomator.Until
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.action.ViewActions.click
 import androidx.test.espresso.matcher.ViewMatchers.withText
+import androidx.test.espresso.assertion.ViewAssertions.matches
+import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -96,6 +98,20 @@ class RegionImportTest {
             }
             locations.removeTestProvider(LocationManager.GPS_PROVIDER)
             device.executeShellCommand("screencap -p /sdcard/Download/ole-evidence/gps-offline.png")
+            PackageStore(context).importPackage(context.assets.open("test-packs/gervais-original-aerial.olepack"))
+            scenario.recreate();waitReady(scenario)
+            scenario.onActivity { a -> val p=a.region!!.manifest.getJSONObject("selection_test");a.map!!.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(p.getDouble("latitude"),p.getDouble("longitude")),18.0)) }
+            onView(withText("Region")).perform(click())
+            onView(withText("Show installed optional aerial")).perform(click())
+            Thread.sleep(5000);waitReady(scenario)
+            scenario.onActivity { a ->
+                assertNotNull(a.map!!.style!!.getLayer("aerial-gervais-original-aerial"))
+                val p=a.region!!.manifest.getJSONObject("selection_test")
+                assertTrue("Optional aerial must retain parcel selection",a.selectParcel(LatLng(p.getDouble("latitude"),p.getDouble("longitude"))))
+            }
+            onView(withText("Property details")).check(matches(isDisplayed()))
+            device.executeShellCommand("screencap -p /sdcard/Download/ole-evidence/optional-aerial-parcel.png")
+            device.pressBack()
         }
     }
 

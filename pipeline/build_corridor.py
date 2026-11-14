@@ -45,6 +45,15 @@ def validate_vector(path, config):
             assert any(k.startswith('roads:') for k in found), target
             targets.append({**target,'tile_feature_counts_with_edge_duplicates':dict(found),'names':sorted(labels)})
     assert all(counts[k]>0 for k in ['roads','water','waterway','land','place'])
+    # Name audit against OPRD's published maps: absence of a name does not prove absent geometry.
+    expected={
+        'Silver Falls State Park':['Canyon Trail','Rim Trail','Maple Ridge Trail','Winter Trail','North Rim Trail','Twin Falls Trail','Howard Creek Loop','Buck Mountain Loop','Catamount Trail','Perimeter Trail','Smith Creek Trail','214 Trail'],
+        'Willamette Mission State Park':['Willamette Vision Educational Trail']}
+    for target in targets:
+        checks=expected.get(target['name'],[])
+        present={name.casefold() for name in target['names']}
+        target['official_map_names_found']=[name for name in checks if name.casefold() in present]
+        target['official_map_names_not_found_exactly']=[name for name in checks if name.casefold() not in present]
     return {'result':'PASS','tiles':total,'maxzoom_features_with_edge_duplicates':dict(counts),
             'targets':targets,'limits':'Tile counts include edge duplicates. OSM completeness and current trail closures are not independently established.'}
 
@@ -70,7 +79,7 @@ def main():
     report=validate_vector(root/'basemap.pmtiles',config)
     (out/'vector-validation.json').write_text(json.dumps(report,indent=2))
     (root/'source-metadata.json').write_text(json.dumps({'url':url,'sha256':sha(source),'osmium':json.loads((work/'source-info.json').read_text()),'tool':'Tilemaker v3.2.0','schema':'Oregon outdoor v1','license':'https://opendatacommons.org/licenses/odbl/1-0/'}))
-    finish(root,{k:v for k,v in config.items() if k not in ['parcel_regions']},'vector',tile_count=report['tiles'],attribution='© OpenStreetMap contributors • ODbL 1.0 • source extract: Geofabrik')
+    finish(root,{k:v for k,v in config.items() if k not in ['parcel_regions']},'vector',tile_count=report['tiles'],tile_schema='oregon-outdoor-v1',attribution='© OpenStreetMap contributors • ODbL 1.0 • source extract: Geofabrik')
     for region in config['parcel_regions']:
         build_parcels({**region,'revision':config['revision']},out)
     split_baseline(args.baseline,out)
@@ -79,7 +88,8 @@ def main():
     for id in [config['id'],'gervais-original-parcels']:
         shutil.copyfile(out/(id+'.olepack'),assets/'packs'/(id+'.olepack'))
     tests=Path('android/app/src/androidTest/assets/test-packs');tests.mkdir(parents=True,exist_ok=True)
-    shutil.copyfile(out/'silver-falls.olepack',tests/'silver-falls.olepack')
+    for name in ['silver-falls','gervais-original-aerial']:
+        shutil.copyfile(out/(name+'.olepack'),tests/(name+'.olepack'))
     font=work/'fonts.zip'
     urllib.request.urlretrieve('https://github.com/openmaptiles/fonts/releases/download/v2.0/noto-sans.zip',font)
     with zipfile.ZipFile(font) as z:
