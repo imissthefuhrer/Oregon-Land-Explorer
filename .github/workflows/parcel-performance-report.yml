@@ -42,7 +42,8 @@ jobs:
           gh run download 43625467248 --name offline-test-evidence --dir work/picker-diagnostics
           python - <<'PY'
           from pathlib import Path
-          for path in Path('work/picker-diagnostics').rglob('*system-ui*.xml'):
+          for path in Path('work/picker-diagnostics').rglob('*system-ui*'):
+              if '.xml' not in path.name:continue
               print('DIAGNOSTIC_HIERARCHY',path.name)
               print(path.read_text())
           PY

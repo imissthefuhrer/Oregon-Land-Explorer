@@ -12,8 +12,8 @@ adb shell svc data disable
 # This sandbox is the disposable CI emulator; no physical-phone data is cleared.
 adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 adb install -r android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
-adb shell am instrument -w -r -e class org.oregonlandexplorer.ParcelDatabaseTest org.oregonlandexplorer.expanded.test/androidx.test.runner.AndroidJUnitRunner | tee output/database-instrumentation.txt
-grep -q 'OK (4 tests)' output/database-instrumentation.txt
+adb shell am instrument -w -r -e class org.oregonlandexplorer.ParcelDatabaseTest,org.oregonlandexplorer.LocalTilesTest org.oregonlandexplorer.expanded.test/androidx.test.runner.AndroidJUnitRunner | tee output/database-instrumentation.txt
+grep -q 'OK (6 tests)' output/database-instrumentation.txt
 adb uninstall org.oregonlandexplorer.expanded.test
 adb uninstall org.oregonlandexplorer.expanded
 

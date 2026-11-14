@@ -8,9 +8,7 @@ if [[ "${OLE_REUSE_BENCHMARK:-false}" != true ]]; then
   bash scripts/benchmark-parcels.sh
 fi
 adb shell mkdir -p /sdcard/Download/ole-evidence
-adb push output/gervais-countryside.olepack /sdcard/Download/gervais-countryside.olepack
-adb push output/silver-falls.olepack /sdcard/Download/silver-falls.olepack
 trap 'adb pull /sdcard/Download/ole-evidence/. output/emulator-screenshots/ || true' EXIT
-gradle -p android --no-daemon :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.notClass=org.oregonlandexplorer.ParcelPerformanceTest,org.oregonlandexplorer.ParcelDatabaseTest
+gradle -p android --no-daemon :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.notClass=org.oregonlandexplorer.ParcelPerformanceTest,org.oregonlandexplorer.ParcelDatabaseTest,org.oregonlandexplorer.LocalTilesTest
 adb pull /sdcard/Download/ole-evidence/. output/emulator-screenshots/
 python scripts/summarize-parcel-performance.py

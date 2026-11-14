@@ -68,7 +68,11 @@ class MainActivity : AppCompatActivity(), LocationListener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        LocalTiles.install()
         MapLibre.getInstance(this)
+        // Only the in-process local transport uses virtual HTTPS URLs. This
+        // signals that local files are available; Android connectivity stays offline.
+        MapLibre.setConnected(true)
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Color.rgb(22,59,44)) }
         ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
@@ -96,6 +100,8 @@ class MainActivity : AppCompatActivity(), LocationListener {
         button("Info") { showInfo() }
         root.addView(controls)
         setContentView(root)
+        val activity=java.lang.ref.WeakReference(this)
+        LocalTiles.onError={ message -> activity.get()?.let { a -> a.runOnUiThread { if(!a.destroyed) a.status.text="Local tile read failed: $message" } } }
         mapView.getMapAsync { loaded ->
             map = loaded
             loaded.uiSettings.isLogoEnabled = false
@@ -124,6 +130,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
 
     private fun loadMap(installed: Region, resetCamera: Boolean = true) {
         ready=false
+        LocalTiles.lastError=null
         parcelGeneration++;viewportGeneration++
         val camera=map?.cameraPosition
         map?.setMinZoomPreference(installed.manifest.getInt("minzoom").toDouble())
@@ -138,6 +145,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
             style.addLayer(CircleLayer("gps-dot", "gps").withProperties(circleColor("#298cff"),circleRadius(8f),circleStrokeColor("#ffffff"),circleStrokeWidth(3f)))
             for(name in installed.parcelLayerIds) style.getLayer(name)?.setProperties(visibility(if(parcelVisible) Property.VISIBLE else Property.NONE))
             fix?.let { onLocationChanged(it) }
+            LocalTiles.retain(installed.localTileKeys)
             ready = true
             if(resetCamera) home() else camera?.let { map?.moveCamera(CameraUpdateFactory.newCameraPosition(it)) }
             updateStatus();loadLegacyViewport()
@@ -324,7 +332,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
             target == null || !installed.contains(target.latitude,target.longitude) -> "Area not downloaded · tap Region"
             !fullyInside -> "Local $regionLabel · view extends beyond download"
             else -> "Local $regionLabel · ready"
-        } + detail + aerial + (if((map?.cameraPosition?.zoom ?: 0.0)<14) " · overview boundaries; zoom in to inspect" else "") + parcelLoadNote
+        } + detail + aerial + (if((map?.cameraPosition?.zoom ?: 0.0)<14) " · overview boundaries; zoom in to inspect" else "") + parcelLoadNote + (LocalTiles.lastError?.let { " · tile read failed: $it" } ?: "")
     }
     private fun requestGps() {
         if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
@@ -367,14 +375,14 @@ class MainActivity : AppCompatActivity(), LocationListener {
     override fun onPause() { locations.removeUpdates(this); mapView.onPause(); super.onPause() }
     override fun onStop() { if(networkRegistered) { connectivity.unregisterNetworkCallback(networkCallback); networkRegistered=false }; mapView.onStop(); super.onStop() }
     override fun onDestroy() { destroyed=true;parcelGeneration++;viewportGeneration++;parcelWork.shutdownNow();legacyWork.shutdownNow();mapView.onDestroy();super.onDestroy() }
-    override fun onTrimMemory(level: Int) { super.onTrimMemory(level);if(level>=android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) mapView.onLowMemory() }
+    override fun onTrimMemory(level: Int) { super.onTrimMemory(level);if(level>=android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) { mapView.onLowMemory();LocalTiles.trim() } }
     companion object {
         // Native prefetch is a zoom delta, not a geographic ring. Zero avoids an
         // extra lower-zoom tile pyramid on low-memory phones. Tune only with evidence.
         const val PARCEL_PREFETCH_ZOOM_DELTA=0
         const val LEGACY_PREFETCH_MARGIN=0.10
     }
-    override fun onLowMemory() { super.onLowMemory(); mapView.onLowMemory() }
+    override fun onLowMemory() { super.onLowMemory(); mapView.onLowMemory();LocalTiles.trim() }
     override fun onSaveInstanceState(outState: Bundle) { super.onSaveInstanceState(outState); mapView.onSaveInstanceState(outState) }
     private val Int.dp get() = (this*resources.displayMetrics.density).toInt()
 }

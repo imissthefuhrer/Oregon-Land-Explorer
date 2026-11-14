@@ -83,6 +83,8 @@ jobs:
             android/app/src/main/assets/packs/
             android/app/src/main/assets/glyphs/
             android/app/src/androidTest/assets/
+      - name: Generate independent local tile transport fixtures
+        run: python -m pipeline.tile_fixtures
       - name: Compile app and instrumentation after geometry validation
         working-directory: android
         run: gradle --no-daemon :app:compileDebugKotlin :app:compileDebugAndroidTestKotlin

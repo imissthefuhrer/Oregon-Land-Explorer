@@ -13,6 +13,9 @@ class Region(private val context: Context) {
     val manifest: JSONObject
     val parcelPackages: List<MapPackage>
     val previousPackageIds: Set<String>
+    private val localSources=HashMap<Pair<String,String>,String>()
+    val localTileKeys: Set<String> get()=localSources.values.toSet()
+    private fun tileSource(pack: MapPackage,name: String,type: String)=LocalTiles.source(localSources.getValue(pack.id to name),type)
     private val styleTemplate=context.assets.open("outdoor-style.json").bufferedReader().use { it.readText() }
     val legacyPackages: List<MapPackage> get()=parcelPackages.filter { !it.tiled }
     val parcelLayerIds: List<String> get()=listOf("parcel-fill","parcel-line","selected-line")+parcelPackages.filter { it.tiled }.flatMap { listOf("parcel-fill-${it.id}","parcel-line-${it.id}") }
@@ -26,6 +29,15 @@ class Region(private val context: Context) {
         bases=active.filter { it.kind=="vector" }
         base=active.firstOrNull { it.kind=="vector" } ?: error("Enable an installed vector basemap")
         parcelPackages=active.filter { it.kind in listOf("parcels","legacy") }
+        for(pack in active) {
+            val names=when(pack.kind) {
+                "vector" -> listOf("basemap.pmtiles")
+                "aerial", "legacy" -> listOf("aerial.pmtiles")
+                "parcels" -> if(pack.tiled) listOf("parcels.pmtiles") else emptyList()
+                else -> emptyList()
+            }
+            for(name in names) localSources[pack.id to name]=LocalTiles.register(java.io.File(pack.directory,name))
+        }
         for(pack in legacyPackages) pack.legacyParcelFile=ParcelDatabase.prepareLegacy(pack,java.io.File(context.filesDir,"parcel-indexes"))
         manifest=JSONObject(base.manifest.toString()).put("parcel_count",parcelPackages.sumOf { it.manifest.getInt("parcel_count") })
         parcelPackages.firstOrNull()?.manifest?.optJSONObject("selection_test")?.let { manifest.put("selection_test",it) }
@@ -65,13 +77,13 @@ class Region(private val context: Context) {
     fun containsAerial(latitude: Double,longitude: Double)=packages.any { it.enabled && it.kind in listOf("aerial","legacy") && it.contains(latitude,longitude) }
     fun style(aerial: Boolean=false): String {
         val style=JSONObject(styleTemplate)
-        style.getJSONObject("sources").getJSONObject("outdoors").put("url",base.url("basemap.pmtiles"))
+        style.getJSONObject("sources").put("outdoors",tileSource(base,"basemap.pmtiles","vector"))
         // Each additional compatible outdoor archive gets its own local source and layers.
         // Imported packages cannot inject remote styles, URLs, glyphs or executable code.
         val original=JSONArray(style.getJSONArray("layers").toString())
         for((index,pack) in bases.filter { it.id!=base.id }.withIndex()) {
             val source="outdoors-$index"
-            style.getJSONObject("sources").put(source,JSONObject().put("type","vector").put("url",pack.url("basemap.pmtiles")))
+            style.getJSONObject("sources").put(source,tileSource(pack,"basemap.pmtiles","vector"))
             for(i in 0 until original.length()) {
                 val layer=JSONObject(original.getJSONObject(i).toString())
                 if(layer.optString("source")=="outdoors") {
@@ -84,13 +96,13 @@ class Region(private val context: Context) {
             val layers=style.getJSONArray("layers")
             for(pack in packages.filter { it.enabled && it.kind in listOf("aerial","legacy") }) {
                 val source="aerial-${pack.id}"
-                style.getJSONObject("sources").put(source,JSONObject().put("type","raster").put("tileSize",256).put("url",pack.url("aerial.pmtiles")))
+                style.getJSONObject("sources").put(source,tileSource(pack,"aerial.pmtiles","raster"))
                 layers.put(JSONObject().put("id",source).put("type","raster").put("source",source).put("paint",JSONObject().put("raster-fade-duration",0)))
             }
         }
         for(pack in parcelPackages.filter { it.tiled }) {
             val source="parcels-${pack.id}"
-            style.getJSONObject("sources").put(source,JSONObject().put("type","vector").put("url",pack.url("parcels.pmtiles")))
+            style.getJSONObject("sources").put(source,tileSource(pack,"parcels.pmtiles","vector"))
             style.getJSONArray("layers").put(JSONObject().put("id","parcel-fill-${pack.id}").put("type","fill").put("source",source).put("source-layer","parcels").put("minzoom",12)
                 .put("paint",JSONObject().put("fill-color","#ffb547").put("fill-opacity",0.025)))
             style.getJSONArray("layers").put(JSONObject().put("id","parcel-line-${pack.id}").put("type","line").put("source",source).put("source-layer","boundaries").put("minzoom",12)

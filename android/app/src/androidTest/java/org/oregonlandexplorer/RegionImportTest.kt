@@ -71,28 +71,46 @@ class RegionImportTest {
         val hierarchy=ByteArrayOutputStream();device.dumpWindowHierarchy(hierarchy)
         evidence("final-system-ui.xml",hierarchy.toString("UTF-8"))
     }
+    private fun publishPickerFixture(): Pair<android.net.Uri,String> {
+        // Publish atomically through MediaStore, like a browser download. Direct
+        // adb writes can race Android 15 scoped-storage indexing and permissions.
+        val values=android.content.ContentValues().apply {
+            put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME,"parcel-import-${SystemClock.elapsedRealtime()}.olepack")
+            put(android.provider.MediaStore.MediaColumns.MIME_TYPE,"application/octet-stream")
+            put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH,"Download")
+            put(android.provider.MediaStore.MediaColumns.IS_PENDING,1)
+        }
+        val uri=context.contentResolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI,values)!!
+        instrumentation.context.assets.open("test-packs/gervais-countryside.olepack").use { input ->
+            context.contentResolver.openOutputStream(uri)!!.use { input.copyTo(it) }
+        }
+        context.contentResolver.update(uri,android.content.ContentValues().apply { put(android.provider.MediaStore.MediaColumns.IS_PENDING,0) },null,null)
+        val name=context.contentResolver.query(uri,arrayOf(android.provider.MediaStore.MediaColumns.DISPLAY_NAME),null,null,null)!!.use { c -> assertTrue(c.moveToFirst());c.getString(0) }
+        return uri to name
+    }
     @Test fun importUsingAndroidDocumentPickerAndRenderDestinationsOffline() {
         device.executeShellCommand("mkdir -p /sdcard/Download/ole-evidence")
         device.executeShellCommand("cmd connectivity airplane-mode enable")
         device.executeShellCommand("svc wifi disable");device.executeShellCommand("svc data disable")
         assertEquals("1",device.executeShellCommand("settings get global airplane_mode_on").trim())
         assertEquals(PackageManager.PERMISSION_DENIED,context.checkSelfPermission(Manifest.permission.INTERNET))
+        val (downloadUri,documentName)=publishPickerFixture()
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             waitReady(scenario)
             onView(withText("Region")).perform(click())
             onView(withText("Import .olepack from Downloads")).perform(click())
             assertTrue("Android document picker did not open",device.wait(Until.hasObject(By.pkg("com.google.android.documentsui")),10000) || device.wait(Until.hasObject(By.pkg("com.android.documentsui")),10000))
             // Downloads may be the initial location or selected from the navigation drawer.
-            if(!device.hasObject(By.text("gervais-countryside.olepack"))) {
+            if(!device.hasObject(By.text(documentName))) {
                 device.waitForIdle(2000)
                 device.findObject(By.desc("Show roots"))?.click()
                 clickSystemText("Downloads")
             }
-            val document=device.wait(Until.findObject(By.text("gervais-countryside.olepack")),10000)
+            val document=device.wait(Until.findObject(By.text(documentName)),10000)
             if(document==null) device.executeShellCommand("uiautomator dump /sdcard/Download/ole-evidence/picker.xml")
             assertNotNull("Downloaded package not shown in picker",document)
             device.executeShellCommand("screencap -p /sdcard/Download/ole-evidence/document-picker.png")
-            clickSystemText("gervais-countryside.olepack")
+            clickSystemText(documentName)
             val importDeadline=SystemClock.elapsedRealtime()+90000
             var imported=false
             while(!imported && SystemClock.elapsedRealtime()<importDeadline) {
@@ -100,6 +118,8 @@ class RegionImportTest {
                 Thread.sleep(250)
             }
             assertTrue("Document import did not activate the validated package",imported)
+            // The private installed copy must keep working after Downloads removal.
+            assertEquals(1,context.contentResolver.delete(downloadUri,null,null))
             scenario.onActivity { a ->
                 assertTrue(a.region!!.packages.any { it.id=="gervais-countryside" && it.enabled })
                 assertTrue(a.region!!.containsParcel(45.114,-122.932))
