@@ -1,0 +1,44 @@
+name: Parcel performance report
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Run containing completed baseline and optimized benchmark evidence
+        required: true
+        default: '43621106452'
+  pull_request:
+    paths: ['scripts/summarize-parcel-performance.py', '.github/workflows/parcel-performance-report.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  report:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download executed measurements
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BENCHMARK_RUN: ${{ inputs.run_id || '43621106452' }}
+        run: |
+          gh run download "$BENCHMARK_RUN" --name offline-test-evidence --dir work/report-input
+          mkdir -p output/emulator-screenshots
+          python - <<'PY'
+          from pathlib import Path
+          import shutil
+          source=Path('work/report-input')
+          for name in ['baseline-performance.json','optimized-performance.json']:
+              matches=list(source.rglob(name));assert len(matches)==1,(name,matches)
+              shutil.copyfile(matches[0],Path('output/emulator-screenshots')/name)
+          for path in source.rglob('*-cold-*.txt'):
+              shutil.copyfile(path,Path('output')/path.name)
+          PY
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$BENCHMARK_RUN" > output/measurement-run.json
+      - run: python3 scripts/summarize-parcel-performance.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: parcel-performance-report
+          path: |
+            output/parcel-performance.json
+            output/measurement-run.json

@@ -1,6 +1,7 @@
 """No target is substituted for a measurement. Preserve all raw samples."""
 import json
 import statistics
+import re
 from pathlib import Path
 
 root=Path('output/emulator-screenshots')
@@ -40,5 +41,17 @@ for old,new in zip(before['scenarios'],after['scenarios'],strict=True):
 report={'comparison':comparisons,'limits':after['limits'],
         'baseline':before,'optimized':after,
         'historical_pr4_both_pss_kib':613805}
+launches={}
+for path in sorted(Path('output').glob('*-cold-*.txt')):
+    match=re.fullmatch(r'(baseline|optimized|upgraded-legacy)-cold-[123]\.txt',path.name)
+    if match:
+        total=re.search(r'^TotalTime:\s*(\d+)',path.read_text(),re.M)
+        assert total,path
+        launches.setdefault(match[1],[]).append(int(total[1]))
+report['cold_activity_total_ms']=launches
+report['map_readiness_ms']=[{'scenario':old['scenario'],
+    'baseline_activity_ready':old['activity_ready_ms'],'optimized_activity_ready':new['activity_ready_ms'],
+    'baseline_first_complete_frame':old['first_complete_frame_ms'],'optimized_first_complete_frame':new['first_complete_frame_ms']}
+    for old,new in zip(before['scenarios'],after['scenarios'],strict=True)]
 Path('output/parcel-performance.json').write_text(json.dumps(report,indent=2))
-print(json.dumps({'comparison':comparisons,'limits':after['limits']},indent=2))
+print(json.dumps({k:report[k] for k in ['comparison','cold_activity_total_ms','map_readiness_ms','limits']},indent=2))
