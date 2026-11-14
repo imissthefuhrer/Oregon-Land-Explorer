@@ -104,6 +104,17 @@ class OfflineMapTest {
                 }
                 Thread.sleep(5000)
                 device.executeShellCommand("screencap -p /sdcard/Download/ole-evidence/file-glyph-probe.png")
+                val sprite=java.io.File(context.cacheDir,"sprite-probe").apply { mkdirs() }
+                for(suffix in listOf("","@2x")) {
+                    java.io.File(sprite,"empty$suffix.json").writeText("{}")
+                    java.io.File(sprite,"empty$suffix.png").outputStream().use { out -> android.graphics.Bitmap.createBitmap(2,2,android.graphics.Bitmap.Config.ARGB_8888).compress(android.graphics.Bitmap.CompressFormat.PNG,100,out) }
+                }
+                scenario.onActivity { a ->
+                    val json=org.json.JSONObject(a.region!!.style()).put("sprite","file://${sprite.absolutePath}/empty")
+                    a.map!!.setStyle(org.maplibre.android.maps.Style.Builder().fromJson(json.toString()))
+                }
+                Thread.sleep(4000)
+                device.executeShellCommand("screencap -p /sdcard/Download/ole-evidence/sprite-probe.png")
             }
             assertTrue("Map labels must be visibly rendered ($darkLabelPixels dark pixels)",darkLabelPixels>100)
             var expectedTaxlot=""
