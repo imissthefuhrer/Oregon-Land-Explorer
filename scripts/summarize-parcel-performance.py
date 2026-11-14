@@ -11,6 +11,12 @@ for old,new in zip(before['scenarios'],after['scenarios'],strict=True):
     assert old['scenario']==new['scenario']
     b=old['after_navigation']['pss_kib'];a=new['after_navigation']['pss_kib']
     samples=new['navigation_samples']
+    tail=samples[len(samples)//2:]
+    def slope(part):
+        if len(part)<2:return None
+        xs=[(s['elapsed_ms']-part[0]['elapsed_ms'])/60000 for s in part]
+        ys=[s['pss_kib']/1024 for s in part]
+        return statistics.linear_regression(xs,ys).slope
     comparisons.append({'scenario':new['scenario'],'baseline_pss_kib':b,'optimized_pss_kib':a,
                         'reduction_percent':round((1-a/b)*100,2),
                         'baseline_java_alloc_bytes':old['after_navigation']['java_alloc_bytes'],
@@ -26,7 +32,11 @@ for old,new in zip(before['scenarios'],after['scenarios'],strict=True):
                         'optimized_native_fps_mean':new.get('native_fps_mean'),
                         'optimized_internal_data_bytes_all_versions_and_indexes':new.get('internal_data_bytes_all_versions_and_indexes'),
                         'optimized_navigation_pss_min_max_kib':[min(s['pss_kib'] for s in samples),max(s['pss_kib'] for s in samples)],
-                        'optimized_navigation_first_last_pss_kib':[samples[0]['pss_kib'],samples[-1]['pss_kib']]})
+                        'optimized_navigation_first_last_pss_kib':[samples[0]['pss_kib'],samples[-1]['pss_kib']],
+                        'optimized_navigation_tail_pss_mib_per_minute':slope(tail),
+                        'optimized_navigation_last_ten_pss_kib':[s['pss_kib'] for s in samples[-10:]],
+                        'optimized_navigation_first_last_native_alloc_bytes':[samples[0]['native_alloc_bytes'],samples[-1]['native_alloc_bytes']],
+                        'optimized_navigation_first_last_java_alloc_bytes':[samples[0]['java_alloc_bytes'],samples[-1]['java_alloc_bytes']]})
 report={'comparison':comparisons,'limits':after['limits'],
         'baseline':before,'optimized':after,
         'historical_pr4_both_pss_kib':613805}

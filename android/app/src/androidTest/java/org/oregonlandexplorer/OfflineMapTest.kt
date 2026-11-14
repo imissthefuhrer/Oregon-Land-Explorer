@@ -85,6 +85,14 @@ class OfflineMapTest {
                 for(name in activity.region!!.parcelLayerIds) activity.map!!.style!!.getLayer(name)!!.setProperties(visibility("visible"))
             }
             Thread.sleep(1500)
+            scenario.onActivity { activity ->
+                // The representative selection point is inside a 481 x 1176 m
+                // parcel; at zoom 18 its boundary is legitimately off-screen.
+                // Check linework here at the town overview, where edges are visible.
+                val rect=android.graphics.RectF(0f,0f,activity.mapView.width.toFloat(),activity.mapView.height.toFloat())
+                val lines=activity.region!!.parcelLayerIds.filter { it.startsWith("parcel-line") }.toTypedArray()
+                assertTrue("Native parcel boundary linework must render",activity.map!!.queryRenderedFeatures(rect,*lines).isNotEmpty())
+            }
             device.executeShellCommand("screencap -p /sdcard/Download/ole-evidence/offline-boundaries.png")
             scenario.onActivity { activity ->
                 val test=activity.region!!.manifest.getJSONObject("selection_test")
@@ -95,10 +103,8 @@ class OfflineMapTest {
                 val test=activity.region!!.manifest.getJSONObject("selection_test")
                 val rect=android.graphics.RectF(0f,0f,activity.mapView.width.toFloat(),activity.mapView.height.toFloat())
                 val fills=activity.region!!.parcelLayerIds.filter { it.startsWith("parcel-fill") }.toTypedArray()
-                val lines=activity.region!!.parcelLayerIds.filter { it.startsWith("parcel-line") }.toTypedArray()
                 val visible=activity.map!!.queryRenderedFeatures(rect,*fills)
                 assertTrue("Exact popup must correspond to a natively rendered parcel polygon",visible.any { it.getStringProperty("parcel_key")==expected.getStringProperty("parcel_key") })
-                assertTrue("Native parcel boundary linework must render",activity.map!!.queryRenderedFeatures(rect,*lines).isNotEmpty())
                 val p=activity.map!!.projection.toScreenLocation(LatLng(test.getDouble("latitude"),test.getDouble("longitude")))
                 val offset=IntArray(2);activity.mapView.getLocationOnScreen(offset)
                 clickX=p.x.toInt()+offset[0]; clickY=p.y.toInt()+offset[1]
