@@ -35,6 +35,24 @@ jobs:
               shutil.copyfile(path,Path('output')/path.name)
           PY
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$BENCHMARK_RUN" > output/measurement-run.json
+      - name: Inspect cold-start regression evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download 43633126888 --name offline-test-evidence --dir work/cold-start-evidence
+          python - <<'PYCODE'
+          from pathlib import Path
+          for p in Path('work/cold-start-evidence/android').rglob('*'):
+              if not p.is_file():continue
+              print('EVIDENCE_FILE',p)
+              if p.suffix=='.xml':print(p.read_text(errors='replace'))
+              if 'logcat' in p.name.lower():
+                  lines=p.read_text(errors='replace').splitlines()
+                  selected=set()
+                  for i,line in enumerate(lines):
+                      if any(t in line for t in ['FATAL EXCEPTION','Fatal signal','AssertionError','junit.framework','Process: org.oregon','Abort message:','backtrace:']):selected.update(range(max(0,i-10),min(len(lines),i+50)))
+                  print('\n'.join(lines[i] for i in sorted(selected)))
+          PYCODE
       - run: python3 scripts/summarize-parcel-performance.py
       - uses: actions/upload-artifact@v4
         with:
