@@ -1,215 +1,215 @@
 {
-  "measurement_run": 43630083953,
-  "optimized_source_commit": "bcdaa8d0c8b818dede9f618cf3dfaaf52a19fd24",
+  "measurement_run": 43634333637,
+  "optimized_source_commit": "c886dea36a6d6a841681f4c548905cd67466f952",
   "baseline_source_commit": "e61cbef399f376f8d7f68fb48f8eb17c455d5a7f",
   "comparison": [
     {
       "scenario": "original",
-      "baseline_pss_kib": 140838,
-      "optimized_pss_kib": 124559,
-      "reduction_percent": 11.56,
-      "baseline_java_alloc_bytes": 9314864,
-      "optimized_java_alloc_bytes": 7584944,
-      "baseline_native_alloc_bytes": 68869008,
-      "optimized_native_alloc_bytes": 31134464,
-      "baseline_popup_median_ms": 851,
-      "optimized_popup_median_ms": 811,
-      "optimized_lookup_to_ui_median_ms": 5,
-      "baseline_complete_frame_median_ms": 481,
-      "optimized_complete_frame_median_ms": 415,
-      "baseline_native_fps_mean": 16.890965051167456,
-      "optimized_native_fps_mean": 20.32391867643019,
-      "optimized_internal_data_bytes_all_versions_and_indexes": 168093813,
+      "baseline_pss_kib": 147504,
+      "optimized_pss_kib": 120113,
+      "reduction_percent": 18.57,
+      "baseline_java_alloc_bytes": 8861440,
+      "optimized_java_alloc_bytes": 4879600,
+      "baseline_native_alloc_bytes": 75917616,
+      "optimized_native_alloc_bytes": 29983856,
+      "baseline_popup_median_ms": 761,
+      "optimized_popup_median_ms": 761,
+      "optimized_lookup_to_ui_median_ms": 6,
+      "baseline_complete_frame_median_ms": 347,
+      "optimized_complete_frame_median_ms": 336,
+      "baseline_native_fps_mean": 17.616884352054345,
+      "optimized_native_fps_mean": 24.345274738704568,
+      "optimized_internal_data_bytes_all_versions_and_indexes": 163680885,
       "optimized_navigation_pss_min_max_kib": [
-        124033,
-        124033
+        120423,
+        120423
       ],
       "optimized_navigation_first_last_pss_kib": [
-        124033,
-        124033
+        120423,
+        120423
       ],
       "optimized_navigation_tail_pss_mib_per_minute": null,
       "optimized_navigation_last_ten_pss_kib": [
-        124033
+        120423
       ],
       "optimized_navigation_first_last_native_alloc_bytes": [
-        30082672,
-        30082672
+        28904944,
+        28904944
       ],
       "optimized_navigation_first_last_java_alloc_bytes": [
-        7584944,
-        7584944
+        4650224,
+        4650224
       ]
     },
     {
       "scenario": "gervais",
-      "baseline_pss_kib": 493678,
-      "optimized_pss_kib": 123891,
-      "reduction_percent": 74.9,
-      "baseline_java_alloc_bytes": 102616336,
-      "optimized_java_alloc_bytes": 5719504,
-      "baseline_native_alloc_bytes": 341294528,
-      "optimized_native_alloc_bytes": 31447808,
-      "baseline_popup_median_ms": 854,
-      "optimized_popup_median_ms": 863,
-      "optimized_lookup_to_ui_median_ms": 6,
-      "baseline_complete_frame_median_ms": 413,
-      "optimized_complete_frame_median_ms": 168,
-      "baseline_native_fps_mean": 15.923059424788827,
-      "optimized_native_fps_mean": 13.269569914681096,
-      "optimized_internal_data_bytes_all_versions_and_indexes": 168282228,
+      "baseline_pss_kib": 503305,
+      "optimized_pss_kib": 125338,
+      "reduction_percent": 75.1,
+      "baseline_java_alloc_bytes": 102871904,
+      "optimized_java_alloc_bytes": 7610688,
+      "baseline_native_alloc_bytes": 350264368,
+      "optimized_native_alloc_bytes": 32632864,
+      "baseline_popup_median_ms": 745,
+      "optimized_popup_median_ms": 776,
+      "optimized_lookup_to_ui_median_ms": 7,
+      "baseline_complete_frame_median_ms": 527,
+      "optimized_complete_frame_median_ms": 333,
+      "baseline_native_fps_mean": 18.809564856515358,
+      "optimized_native_fps_mean": 22.721106572893216,
+      "optimized_internal_data_bytes_all_versions_and_indexes": 164037236,
       "optimized_navigation_pss_min_max_kib": [
-        122802,
-        122802
+        128019,
+        128019
       ],
       "optimized_navigation_first_last_pss_kib": [
-        122802,
-        122802
+        128019,
+        128019
       ],
       "optimized_navigation_tail_pss_mib_per_minute": null,
       "optimized_navigation_last_ten_pss_kib": [
-        122802
+        128019
       ],
       "optimized_navigation_first_last_native_alloc_bytes": [
-        29266448,
-        29266448
+        30533632,
+        30533632
       ],
       "optimized_navigation_first_last_java_alloc_bytes": [
-        5719504,
-        5719504
+        7610688,
+        7610688
       ]
     },
     {
       "scenario": "silver",
-      "baseline_pss_kib": 219962,
-      "optimized_pss_kib": 122596,
-      "reduction_percent": 44.26,
-      "baseline_java_alloc_bytes": 32386688,
-      "optimized_java_alloc_bytes": 5849088,
-      "baseline_native_alloc_bytes": 105655456,
-      "optimized_native_alloc_bytes": 29412368,
-      "baseline_popup_median_ms": 810,
-      "optimized_popup_median_ms": 846,
+      "baseline_pss_kib": 225493,
+      "optimized_pss_kib": 125361,
+      "reduction_percent": 44.41,
+      "baseline_java_alloc_bytes": 33528784,
+      "optimized_java_alloc_bytes": 8743216,
+      "baseline_native_alloc_bytes": 105728880,
+      "optimized_native_alloc_bytes": 31124704,
+      "baseline_popup_median_ms": 743,
+      "optimized_popup_median_ms": 776,
       "optimized_lookup_to_ui_median_ms": 4,
-      "baseline_complete_frame_median_ms": 694,
-      "optimized_complete_frame_median_ms": 120,
-      "baseline_native_fps_mean": 15.631469905551741,
-      "optimized_native_fps_mean": 19.956490230373767,
-      "optimized_internal_data_bytes_all_versions_and_indexes": 168343668,
+      "baseline_complete_frame_median_ms": 225,
+      "optimized_complete_frame_median_ms": 123,
+      "baseline_native_fps_mean": 20.326525983287535,
+      "optimized_native_fps_mean": 24.70587117480313,
+      "optimized_internal_data_bytes_all_versions_and_indexes": 164090484,
       "optimized_navigation_pss_min_max_kib": [
-        123372,
-        123372
+        125993,
+        125993
       ],
       "optimized_navigation_first_last_pss_kib": [
-        123372,
-        123372
+        125993,
+        125993
       ],
       "optimized_navigation_tail_pss_mib_per_minute": null,
       "optimized_navigation_last_ten_pss_kib": [
-        123372
+        125993
       ],
       "optimized_navigation_first_last_native_alloc_bytes": [
-        30022416,
-        30022416
+        31719776,
+        31719776
       ],
       "optimized_navigation_first_last_java_alloc_bytes": [
-        5849088,
-        5849088
+        8743216,
+        8743216
       ]
     },
     {
       "scenario": "both",
-      "baseline_pss_kib": 2110752,
-      "optimized_pss_kib": 132761,
-      "reduction_percent": 93.71,
-      "baseline_java_alloc_bytes": 129377104,
-      "optimized_java_alloc_bytes": 7852336,
-      "baseline_native_alloc_bytes": 2006455408,
-      "optimized_native_alloc_bytes": 33746720,
-      "baseline_popup_median_ms": 824,
-      "optimized_popup_median_ms": 902,
-      "optimized_lookup_to_ui_median_ms": 5,
-      "baseline_complete_frame_median_ms": 406,
-      "optimized_complete_frame_median_ms": 168,
-      "baseline_native_fps_mean": 23.399424585408074,
-      "optimized_native_fps_mean": 26.108101136160087,
-      "optimized_internal_data_bytes_all_versions_and_indexes": 168360051,
+      "baseline_pss_kib": 2107923,
+      "optimized_pss_kib": 130119,
+      "reduction_percent": 93.83,
+      "baseline_java_alloc_bytes": 128463744,
+      "optimized_java_alloc_bytes": 8216912,
+      "baseline_native_alloc_bytes": 2006944288,
+      "optimized_native_alloc_bytes": 34561568,
+      "baseline_popup_median_ms": 759,
+      "optimized_popup_median_ms": 759,
+      "optimized_lookup_to_ui_median_ms": 6,
+      "baseline_complete_frame_median_ms": 357,
+      "optimized_complete_frame_median_ms": 345,
+      "baseline_native_fps_mean": 27.637261216044468,
+      "optimized_native_fps_mean": 29.915536120284102,
+      "optimized_internal_data_bytes_all_versions_and_indexes": 164094579,
       "optimized_navigation_pss_min_max_kib": [
-        126041,
-        134892
+        125034,
+        135150
       ],
       "optimized_navigation_first_last_pss_kib": [
-        129173,
-        131081
+        130238,
+        128735
       ],
-      "optimized_navigation_tail_pss_mib_per_minute": -1.4261070209392326,
+      "optimized_navigation_tail_pss_mib_per_minute": -1.0578394509890527,
       "optimized_navigation_last_ten_pss_kib": [
-        128804,
-        128928,
-        129128,
-        129868,
-        129640,
-        130488,
-        131173,
-        131093,
-        131549,
-        131081
+        129207,
+        131259,
+        131171,
+        127307,
+        129827,
+        131267,
+        131443,
+        131635,
+        132083,
+        128735
       ],
       "optimized_navigation_first_last_native_alloc_bytes": [
-        31200416,
-        30819408
+        32104432,
+        31635616
       ],
       "optimized_navigation_first_last_java_alloc_bytes": [
-        8590304,
-        7786800
+        8748784,
+        8216912
       ]
     }
   ],
   "cold_activity_total_ms": {
     "baseline": [
-      1023,
-      1155,
-      847
+      809,
+      870,
+      759
     ],
     "optimized": [
-      701,
-      932,
-      933
+      624,
+      828,
+      845
     ],
     "upgraded-legacy": [
-      951,
-      843,
-      765
+      717,
+      598,
+      741
     ]
   },
   "map_readiness_ms": [
     {
       "scenario": "original",
-      "baseline_activity_ready": 1543,
-      "optimized_activity_ready": 1408,
-      "baseline_first_complete_frame": 2033,
-      "optimized_first_complete_frame": 1893
+      "baseline_activity_ready": 1215,
+      "optimized_activity_ready": 1204,
+      "baseline_first_complete_frame": 1565,
+      "optimized_first_complete_frame": 1541
     },
     {
       "scenario": "gervais",
-      "baseline_activity_ready": 2746,
-      "optimized_activity_ready": 1020,
-      "baseline_first_complete_frame": 3162,
-      "optimized_first_complete_frame": 1200
+      "baseline_activity_ready": 2864,
+      "optimized_activity_ready": 874,
+      "baseline_first_complete_frame": 3411,
+      "optimized_first_complete_frame": 1239
     },
     {
       "scenario": "silver",
-      "baseline_activity_ready": 1532,
-      "optimized_activity_ready": 1226,
-      "baseline_first_complete_frame": 2226,
-      "optimized_first_complete_frame": 1346
+      "baseline_activity_ready": 1369,
+      "optimized_activity_ready": 831,
+      "baseline_first_complete_frame": 1594,
+      "optimized_first_complete_frame": 1000
     },
     {
       "scenario": "both",
-      "baseline_activity_ready": 3156,
-      "optimized_activity_ready": 1067,
-      "baseline_first_complete_frame": 3566,
-      "optimized_first_complete_frame": 1266
+      "baseline_activity_ready": 3012,
+      "optimized_activity_ready": 1008,
+      "baseline_first_complete_frame": 3394,
+      "optimized_first_complete_frame": 1353
     }
   ],
   "limits": "Instrumentation PSS includes the test runner. Same process per variant; startup is ActivityScenario creation, not a force-stopped process. Separate shell cold-launch timings accompany this report. Mesa software rendering is not phone GPU evidence."

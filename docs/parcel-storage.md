@@ -1,4 +1,4 @@
-# Disk-backed parcels (Android preview 0.3.1)
+# Disk-backed parcels (Android preview 0.3.2)
 
 This implementation builds on merged PR #4, final commit `e61cbef`, with the
 unchanged `expanded-v0.2` release as the known-good fallback. It retains MapLibre
@@ -8,7 +8,7 @@ included. [Existing source/data-use safeguards](data-use.md) continue to apply.
 
 ## Installation and update
 
-Use the [verified download run](https://github.com/imissthefuhrer/Oregon-Land-Explorer/actions/runs/43630083953) linked from [PR #6](https://github.com/imissthefuhrer/Oregon-Land-Explorer/pull/6).
+Use the [verified download run](https://github.com/imissthefuhrer/Oregon-Land-Explorer/actions/runs/43634333637) linked from [PR #6](https://github.com/imissthefuhrer/Oregon-Land-Explorer/pull/6).
 [Measured results and test details](parcel-performance.md) accompany this build.
 Download its `oregon-land-explorer-optimized-preview` artifact and extract the ZIP.
 The artifact contains `app-debug.apk`, five `.olepack` archives and SHA-256 sums.
@@ -18,7 +18,7 @@ Do not infer successful testing from the presence of an APK artifact: check the
 job's final result and the performance report.
 
 1. Keep the existing app installed. Install the new APK as an update. Application
-   ID remains `org.oregonlandexplorer.expanded`; version code is 4 and CI uses the
+   ID remains `org.oregonlandexplorer.expanded`; version code is 5 and CI uses the
    existing persistent signing secret. The original prototype remains independent.
 2. Import the new `gervais-countryside.olepack`, `silver-falls.olepack` and
    `gervais-original-parcels.olepack` through **Region → Import .olepack from
@@ -39,7 +39,7 @@ job's final result and the performance report.
 Do not uninstall the app to resolve an update/signature error: that would remove
 its internal data. Retain the installed app and inspect the signing/build evidence.
 The old `expanded-v0.2` APK is preserved, but Android does not normally install an
-older version code over a newer one. Package rollback is available within 0.3.1;
+older version code over a newer one. Package rollback is available within 0.3.2;
 an APK downgrade is a separate Android operation and is not promised by that menu.
 
 ## Package contract
@@ -116,7 +116,12 @@ sizes are capped at 4 MiB. Nested-directory and Hilbert/body-hash tests use an
 independent Python PMTiles implementation, including synthetic binary reader
 fixtures that are never part of the delivered map datasets.
 
-Panning does not rebuild the parcel source. Native old-zoom tile caching is disabled and native
+Panning does not rebuild the parcel source. The cache policy is applied after the first complete render of each resumed
+surface. Map-ready can precede native renderer creation; calling the renderer
+cache API there caused a null dereference during recreation. Memory trims touch
+the native renderer only after that resumed surface has rendered. Five repeated
+recreations with stopped-surface memory trims and resumes exercise this path.
+Native old-zoom tile caching is disabled and native
 prefetch zoom delta defaults to zero; `PARCEL_PREFETCH_ZOOM_DELTA` is an explicit
 tuning constant. It is a lower-zoom prefetch setting, not a geographic margin.
 The legacy compatibility viewport has a 10% geographic margin, at most 1,000

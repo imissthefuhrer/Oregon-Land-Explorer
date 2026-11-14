@@ -5,7 +5,7 @@ on:
       run_id:
         description: Run containing completed baseline and optimized benchmark evidence
         required: true
-        default: '43630083953'
+        default: '43634333637'
   pull_request:
     paths: ['scripts/summarize-parcel-performance.py', '.github/workflows/parcel-performance-report.yml']
 permissions:
@@ -20,7 +20,7 @@ jobs:
       - name: Download executed measurements
         env:
           GH_TOKEN: ${{ github.token }}
-          BENCHMARK_RUN: ${{ inputs.run_id || '43630083953' }}
+          BENCHMARK_RUN: ${{ inputs.run_id || '43634333637' }}
         run: |
           gh run download "$BENCHMARK_RUN" --name offline-test-evidence --dir work/report-input
           mkdir -p output/emulator-screenshots

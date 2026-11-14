@@ -45,17 +45,6 @@ jobs:
           mkdir -p work/baseline-source/android/app/src/androidTest/assets/test-packs
           cp work/expanded/*.olepack work/baseline-source/android/app/src/androidTest/assets/test-packs/
           cp android/app/src/androidTest/java/org/oregonlandexplorer/ParcelPerformanceTest.kt work/baseline-source/android/app/src/androidTest/java/org/oregonlandexplorer/
-      - name: Retain passed paired measurements only for unchanged app and GIS code
-        id: paired
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if git diff --quiet bcdaa8d0c8b818dede9f618cf3dfaaf52a19fd24 HEAD -- android/app/src/main android/app/build.gradle.kts android/build.gradle.kts android/settings.gradle.kts android/gradle.properties android/app/src/androidTest/java/org/oregonlandexplorer/ParcelPerformanceTest.kt android/app/src/androidTest/java/org/oregonlandexplorer/ParcelDatabaseTest.kt android/app/src/androidTest/java/org/oregonlandexplorer/LocalTilesTest.kt pipeline scripts/benchmark-parcels.sh; then
-            gh run download 43630083953 --name offline-test-evidence --dir work/paired-evidence
-            python scripts/reuse-parcel-benchmark.py work/paired-evidence
-            python scripts/summarize-parcel-performance.py
-            echo 'reused=true' >> "$GITHUB_OUTPUT"
-          fi
       - uses: actions/cache/restore@v4
         id: parcel-cache
         with:
@@ -139,7 +128,6 @@ jobs:
         env:
           OLE_KEYSTORE: ${{ runner.temp }}/ole-signing.p12
           OLE_STORE_PASSWORD: ${{ secrets.OLE_STORE_PASSWORD }}
-          OLE_REUSE_BENCHMARK: ${{ steps.paired.outputs.reused }}
         with:
           api-level: 35
           arch: x86_64

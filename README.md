@@ -33,5 +33,5 @@ Ownership and legal access remain **Unknown**. A road, trail or park polygon is
 not permission to enter. Generated owner datasets and private home coordinates
 are never committed. Check actual CI evidence and privately verify coverage using GPS.
 
-The tested 0.3.1 preview, APK/package downloads and measured before/after results
+The tested 0.3.2 preview, APK/package downloads and measured before/after results
 are linked in [parcel performance results](docs/parcel-performance.md).
