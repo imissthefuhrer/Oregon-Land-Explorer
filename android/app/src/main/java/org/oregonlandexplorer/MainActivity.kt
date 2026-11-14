@@ -40,6 +40,20 @@ class MainActivity : AppCompatActivity(), LocationListener {
     private var parcelVisible = true
     private var aerialVisible = false
     private var importing = false
+    private fun parcelWorker()=java.util.concurrent.ThreadPoolExecutor(1,1,0L,java.util.concurrent.TimeUnit.MILLISECONDS,
+        java.util.concurrent.ArrayBlockingQueue<Runnable>(1),java.util.concurrent.ThreadPoolExecutor.DiscardOldestPolicy())
+    private val parcelWork=parcelWorker()
+    // A compatibility viewport refresh must never discard a queued property tap.
+    private val legacyWork=parcelWorker()
+    private var parcelGeneration=0L
+    private var viewportGeneration=0L
+    private var parcelLoadNote=""
+    @Volatile var lastSelectionMs=0L
+    private var tilePolicyApplied=false
+    private var rendererResumed=false
+    @Volatile var mapReadyMs=0L
+    private val launchedAt=android.os.SystemClock.elapsedRealtime()
+    private var destroyed=false
     private val importer = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if(uri!=null) importDocument(uri)
     }
@@ -56,7 +70,11 @@ class MainActivity : AppCompatActivity(), LocationListener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        LocalTiles.install()
         MapLibre.getInstance(this)
+        // Only the in-process local transport uses virtual HTTPS URLs. This
+        // signals that local files are available; Android connectivity stays offline.
+        MapLibre.setConnected(true)
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Color.rgb(22,59,44)) }
         ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
@@ -84,18 +102,33 @@ class MainActivity : AppCompatActivity(), LocationListener {
         button("Info") { showInfo() }
         root.addView(controls)
         setContentView(root)
+        val activity=java.lang.ref.WeakReference(this)
+        LocalTiles.onError={ message -> activity.get()?.let { a -> a.runOnUiThread { if(!a.destroyed) a.status.text="Local tile read failed: $message" } } }
         mapView.getMapAsync { loaded ->
             map = loaded
             loaded.uiSettings.isLogoEnabled = false
             loaded.uiSettings.isAttributionEnabled = false // Full source attribution lives in the Info sheet.
             loaded.setMinZoomPreference(8.0)
             loaded.setMaxZoomPreference(19.0)
-            loaded.addOnCameraIdleListener { updateStatus() }
+            // Map-ready can precede native renderer creation during recreation.
+            // Renderer-dependent cache policy belongs after its first complete frame.
+            loaded.addOnCameraMoveStartedListener { _ -> parcelGeneration++;viewportGeneration++ }
+            loaded.addOnCameraIdleListener { updateStatus();loadLegacyViewport() }
+            mapView.addOnDidFinishRenderingMapListener { fully ->
+                if(fully && rendererResumed && !destroyed) {
+                    if(!tilePolicyApplied) {
+                        tilePolicyApplied=true
+                        loaded.setPrefetchZoomDelta(PARCEL_PREFETCH_ZOOM_DELTA)
+                        loaded.setTileCacheEnabled(false)
+                    }
+                    if(mapReadyMs==0L) mapReadyMs=android.os.SystemClock.elapsedRealtime()-launchedAt
+                }
+            }
             loaded.addOnMapClickListener { point -> selectParcel(point) }
             Thread {
                 try {
                     val installed = Region(this)
-                    runOnUiThread { region = installed; loadMap(installed) }
+                    runOnUiThread { if(!destroyed) { region = installed; loadMap(installed) } }
                 } catch (error: Exception) {
                     runOnUiThread { status.text = "Map installation failed: ${error.message}" }
                 }
@@ -105,44 +138,101 @@ class MainActivity : AppCompatActivity(), LocationListener {
 
     private fun loadMap(installed: Region, resetCamera: Boolean = true) {
         ready=false
+        LocalTiles.lastError=null
+        parcelGeneration++;viewportGeneration++
         val camera=map?.cameraPosition
         map?.setMinZoomPreference(installed.manifest.getInt("minzoom").toDouble())
         map?.setMaxZoomPreference(19.0)
         map?.setStyle(Style.Builder().fromJson(installed.style(aerialVisible))) { style ->
-            style.addSource(GeoJsonSource("parcels", installed.parcels))
+            style.addSource(GeoJsonSource("parcels", FeatureCollection.fromFeatures(arrayOf<Feature>())))
             style.addLayer(FillLayer("parcel-fill", "parcels").withProperties(fillColor("#ffb547"), fillOpacity(0.025f)))
             style.addLayer(LineLayer("parcel-line", "parcels").withProperties(lineColor("#b27a25"), lineWidth(1.1f)))
             style.addSource(GeoJsonSource("selection", FeatureCollection.fromFeatures(arrayOf<Feature>())))
             style.addLayer(LineLayer("selected-line", "selection").withProperties(lineColor("#ffffff"), lineWidth(4f)))
             style.addSource(GeoJsonSource("gps", FeatureCollection.fromFeatures(arrayOf<Feature>())))
             style.addLayer(CircleLayer("gps-dot", "gps").withProperties(circleColor("#298cff"),circleRadius(8f),circleStrokeColor("#ffffff"),circleStrokeWidth(3f)))
-            for(name in listOf("parcel-fill","parcel-line","selected-line")) style.getLayer(name)?.setProperties(visibility(if(parcelVisible) Property.VISIBLE else Property.NONE))
+            for(name in installed.parcelLayerIds) style.getLayer(name)?.setProperties(visibility(if(parcelVisible) Property.VISIBLE else Property.NONE))
             fix?.let { onLocationChanged(it) }
+            LocalTiles.retain(installed.localTileKeys)
             ready = true
             if(resetCamera) home() else camera?.let { map?.moveCamera(CameraUpdateFactory.newCameraPosition(it)) }
-            updateStatus()
+            updateStatus();loadLegacyViewport()
         }
     }
 
     fun selectParcel(point: LatLng): Boolean {
         val installed = region ?: return false
-        if (!parcelVisible || !installed.containsParcel(point.latitude, point.longitude)) return false
-        val features = map?.queryRenderedFeatures(map!!.projection.toScreenLocation(point), "parcel-fill") ?: return false
-        if (features.isEmpty()) return false
-        // Shared/overlapping tax lots are not silently collapsed into one owner.
-        if (features.size > 1) {
-            androidx.appcompat.app.AlertDialog.Builder(this).setTitle("Overlapping parcels")
-                .setItems(features.map { "Tax lot ${value(it,"TAXLOT")}" }.toTypedArray()) { _, index -> showParcel(features[index]) }.show()
-        } else showParcel(features.first())
+        if(!parcelVisible || !ready) return false
+        if(!installed.containsParcel(point.latitude,point.longitude)) {
+            sheet("Property coverage unavailable","Property records are not downloaded here. This does not mean the land has no owner.")
+            return true
+        }
+        if((map?.cameraPosition?.zoom ?: 0.0)<14.0) {
+            sheet("Zoom in to inspect properties","Overview boundaries are simplified. Zoom closer to select an approximate assessor boundary; this map is not a survey.")
+            return true
+        }
+        val generation=++parcelGeneration
+        val started=android.os.SystemClock.elapsedRealtime()
+        parcelWork.execute {
+            try {
+                val features=installed.select(point.latitude,point.longitude)
+                runOnUiThread {
+                    if(destroyed || generation!=parcelGeneration || region!==installed) return@runOnUiThread
+                    lastSelectionMs=android.os.SystemClock.elapsedRealtime()-started
+                    when {
+                        features.isEmpty() -> sheet("Property coverage unavailable","No downloaded property record covers this point. Ownership and public access remain unknown.")
+                        features.size>1 -> androidx.appcompat.app.AlertDialog.Builder(this).setTitle("Overlapping parcels")
+                            .setItems(features.map { "Tax lot ${value(it,"TAXLOT")}" }.toTypedArray()) { _, index -> showParcel(features[index]) }.show()
+                        else -> showParcel(features.first())
+                    }
+                }
+            } catch(error: Exception) {
+                runOnUiThread { if(!destroyed && generation==parcelGeneration) sheet("Property lookup failed",error.message ?: "Cannot read installed parcel database") }
+            }
+        }
         return true
     }
+
+    private fun loadLegacyViewport() {
+        val installed=region ?: return
+        if(!ready || installed.legacyPackages.isEmpty()) return
+        val generation=++viewportGeneration
+        val bounds=map?.projection?.visibleRegion?.latLngBounds ?: return
+        val empty=FeatureCollection.fromFeatures(arrayOf<Feature>())
+        if(!parcelVisible || (map?.cameraPosition?.zoom ?: 0.0)<14.0) {
+            map?.style?.getSourceAs<GeoJsonSource>("parcels")?.setGeoJson(empty)
+            return
+        }
+        val dx=(bounds.longitudeEast-bounds.longitudeWest)*LEGACY_PREFETCH_MARGIN
+        val dy=(bounds.latitudeNorth-bounds.latitudeSouth)*LEGACY_PREFETCH_MARGIN
+        val b=doubleArrayOf(bounds.longitudeWest-dx,bounds.latitudeSouth-dy,bounds.longitudeEast+dx,bounds.latitudeNorth+dy)
+        legacyWork.execute {
+            try {
+                val features=installed.legacyViewport(b)
+                runOnUiThread {
+                    if(!destroyed && generation==viewportGeneration && region===installed) {
+                        map?.style?.getSourceAs<GeoJsonSource>("parcels")?.setGeoJson(features)
+                        parcelLoadNote="";updateStatus()
+                    }
+                }
+            } catch(error: Exception) {
+                runOnUiThread {
+                    if(!destroyed && generation==viewportGeneration && region===installed) {
+                        map?.style?.getSourceAs<GeoJsonSource>("parcels")?.setGeoJson(empty)
+                        parcelLoadNote=" · ${error.message}";updateStatus()
+                    }
+                }
+            }
+        }
+    }
+
     private fun value(feature: Feature, key: String): String =
         feature.getProperty(key)?.takeUnless { it.isJsonNull }?.asString?.takeIf { it.isNotBlank() } ?: "Not available"
 
     private fun showParcel(feature: Feature) {
         map?.style?.getSourceAs<GeoJsonSource>("selection")?.setGeoJson(feature)
         val repair=feature.getProperty("geometry_repair_note")?.takeUnless { it.isJsonNull }?.asString?.let { "\n\n$it" } ?: ""
-        sheet("Property details", "Owner: ${value(feature,"OWNERNAME")}\n\nTax lot: ${value(feature,"TAXLOT")}\nAcres: ${value(feature,"ACRES")}\n\nOwnership classification: Unknown\nLegal public access: Unknown\n\nMarion County assessor-derived record. Boundaries are approximate, not a survey. Ownership does not establish permission to enter.$repair")
+        sheet("Property details", "Owner: ${value(feature,"OWNERNAME")}\n\nTax lot: ${value(feature,"TAXLOT")}\nAcres: ${value(feature,"ACRES")}\n\nOwnership classification: Unknown\nLegal public access: Unknown\n\nMarion County assessor-derived record. Boundaries are approximate, not a survey. Ownership does not establish permission to enter.\n\nSource extract: ${value(feature,"source_extracted_at")}\nRegion: ${value(feature,"source_package")}$repair")
     }
     private fun sheet(title: String, body: String) {
         val dialog = BottomSheetDialog(this)
@@ -157,9 +247,9 @@ class MainActivity : AppCompatActivity(), LocationListener {
         val installed=region ?: return
         val records=installed.packages.joinToString("\n\n") { p ->
             val m=p.manifest
-            "${if(p.enabled) "Enabled" else "Disabled"}: ${m.getString("name")}\n${p.kind} · revision ${m.optInt("revision",1)} · ${"%.2f".format(p.directory.walkTopDown().filter { it.isFile }.sumOf { it.length() }/1048576.0)} MiB\nBounds W,S,E,N: ${m.getJSONArray("bbox")}\nExtracted: ${m.optString("extracted_at")}\n${m.getString("attribution")}"
+            "${if(p.enabled) "Enabled" else "Disabled"}: ${m.getString("name")}\n${p.kind} · revision ${m.optInt("revision",1)} · ${"%.2f".format(p.payloadBytes/1048576.0)} MiB\nBounds W,S,E,N: ${m.getJSONArray("bbox")}\nExtracted: ${m.optString("extracted_at")}\n${m.getString("attribution")}"
         }
-        sheet("Installed map data", "$records\n\n${installed.parcels.features()?.size ?: 0} unique selectable parcels.\n\n© OpenStreetMap contributors. Open data under ODbL 1.0: https://www.openstreetmap.org/copyright · https://opendatacommons.org/licenses/odbl/1-0/\nOutdoor data: Geofabrik Oregon extract, compiled with Tilemaker. Fonts: Noto Sans (SIL OFL 1.1). MapLibre Native (BSD-2-Clause).\n\nRoads are light; trails are rust dashes; forest tracks are brown dashes; mapped access=no/private is overprinted purple. These tags are not proof of access. Confirm restrictions and current closures locally.\n\nParcel source: https://services3.arcgis.com/SXXjryU22GsO8OEC/arcgis/rest/services/Parcels/FeatureServer/0\nApproximate assessor-derived boundaries, not surveys; source vintage and completeness are not independently verified. Ownership and legal public access remain Unknown.\n\nAll map data, labels and fonts are local. No internet permission. Vector geometry is stored through zoom 15 and magnified above it; aerial through zoom 17. Home coverage must be checked privately using GPS.")
+        sheet("Installed map data", "$records\n\n${installed.manifest.getInt("parcel_count")} installed parcel records (overlap resolved on selection).\n\n© OpenStreetMap contributors. Open data under ODbL 1.0: https://www.openstreetmap.org/copyright · https://opendatacommons.org/licenses/odbl/1-0/\nOutdoor data: Geofabrik Oregon extract, compiled with Tilemaker. Fonts: Noto Sans (SIL OFL 1.1). MapLibre Native (BSD-2-Clause).\n\nRoads are light; trails are rust dashes; forest tracks are brown dashes; mapped access=no/private is overprinted purple. These tags are not proof of access. Confirm restrictions and current closures locally.\n\nParcel source: https://services3.arcgis.com/SXXjryU22GsO8OEC/arcgis/rest/services/Parcels/FeatureServer/0\nApproximate assessor-derived boundaries, not surveys; source vintage and completeness are not independently verified. Ownership and legal public access remain Unknown.\n\nAll map data, labels and fonts are local. No internet permission. Vector geometry is stored through zoom 15 and magnified above it; aerial through zoom 17. Home coverage must be checked privately using GPS.")
     }
     private fun showRegions() {
         val items=arrayOf("Return to corridor", "Gervais countryside", "St. Louis Ponds", "Willamette Mission State Park", "Silver Falls State Park", "Import .olepack from Downloads", "Manage installed packages", if(aerialVisible) "Use outdoor basemap" else "Show installed optional aerial")
@@ -187,7 +277,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
         androidx.appcompat.app.AlertDialog.Builder(this).setTitle("Installed packages")
             .setItems(packs.map { "${if(it.enabled) "✓" else "○"} ${it.manifest.getString("name")}" }.toTypedArray()) { _, index ->
                 val pack=packs[index];val actions=mutableListOf(if(pack.enabled) "Disable" else "Enable", "Show coverage")
-                if(installed.store.hasPrevious(pack.id)) actions.add("Restore previous version")
+                if(pack.id in installed.previousPackageIds) actions.add("Restore previous version")
                 if(pack.id !in setOf("willamette-silver-outdoors","gervais-original-parcels")) actions.add("Delete downloaded package")
                 androidx.appcompat.app.AlertDialog.Builder(this).setTitle(pack.manifest.getString("name"))
                     .setItems(actions.toTypedArray()) { _, action ->
@@ -213,7 +303,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
             try {
                 action()
                 val updated=Region(this)
-                runOnUiThread { region=updated;importing=false;loadMap(updated,false) }
+                runOnUiThread { if(!destroyed) { region=updated;importing=false;loadMap(updated,false) } }
             } catch(e: Exception) {
                 runOnUiThread { importing=false;sheet("Package operation failed", "${e.message}\nThe previous map remains available.") }
             }
@@ -231,7 +321,9 @@ class MainActivity : AppCompatActivity(), LocationListener {
     }
     private fun toggleParcels() {
         parcelVisible = !parcelVisible
-        for (name in listOf("parcel-fill","parcel-line","selected-line")) map?.style?.getLayer(name)?.setProperties(visibility(if(parcelVisible) Property.VISIBLE else Property.NONE))
+        parcelGeneration++
+        for (name in region?.parcelLayerIds ?: emptyList()) map?.style?.getLayer(name)?.setProperties(visibility(if(parcelVisible) Property.VISIBLE else Property.NONE))
+        loadLegacyViewport()
         Toast.makeText(this, if(parcelVisible) "Parcels visible" else "Parcels hidden", Toast.LENGTH_SHORT).show()
     }
     private fun updateStatus() {
@@ -248,7 +340,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
             target == null || !installed.contains(target.latitude,target.longitude) -> "Area not downloaded · tap Region"
             !fullyInside -> "Local $regionLabel · view extends beyond download"
             else -> "Local $regionLabel · ready"
-        } + detail + aerial
+        } + detail + aerial + (if((map?.cameraPosition?.zoom ?: 0.0)<14) " · overview boundaries; zoom in to inspect" else "") + parcelLoadNote + (LocalTiles.lastError?.let { " · tile read failed: $it" } ?: "")
     }
     private fun requestGps() {
         if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
@@ -287,11 +379,18 @@ class MainActivity : AppCompatActivity(), LocationListener {
         else locationStatus.text="Location permission denied · map still works offline"
     }
     override fun onStart() { super.onStart(); mapView.onStart(); connectivity.registerDefaultNetworkCallback(networkCallback); networkRegistered=true }
-    override fun onResume() { super.onResume(); mapView.onResume(); startGps() }
-    override fun onPause() { locations.removeUpdates(this); mapView.onPause(); super.onPause() }
+    override fun onResume() { super.onResume();tilePolicyApplied=false;rendererResumed=true;mapView.onResume(); startGps() }
+    override fun onPause() { rendererResumed=false;locations.removeUpdates(this); mapView.onPause(); super.onPause() }
     override fun onStop() { if(networkRegistered) { connectivity.unregisterNetworkCallback(networkCallback); networkRegistered=false }; mapView.onStop(); super.onStop() }
-    override fun onDestroy() { mapView.onDestroy(); super.onDestroy() }
-    override fun onLowMemory() { super.onLowMemory(); mapView.onLowMemory() }
+    override fun onDestroy() { destroyed=true;parcelGeneration++;viewportGeneration++;parcelWork.shutdownNow();legacyWork.shutdownNow();mapView.onDestroy();super.onDestroy() }
+    override fun onTrimMemory(level: Int) { super.onTrimMemory(level);if(level>=android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) { if(rendererResumed && tilePolicyApplied && !destroyed) mapView.onLowMemory();LocalTiles.trim() } }
+    companion object {
+        // Native prefetch is a zoom delta, not a geographic ring. Zero avoids an
+        // extra lower-zoom tile pyramid on low-memory phones. Tune only with evidence.
+        const val PARCEL_PREFETCH_ZOOM_DELTA=0
+        const val LEGACY_PREFETCH_MARGIN=0.10
+    }
+    override fun onLowMemory() { super.onLowMemory(); if(rendererResumed && tilePolicyApplied && !destroyed) mapView.onLowMemory();LocalTiles.trim() }
     override fun onSaveInstanceState(outState: Bundle) { super.onSaveInstanceState(outState); mapView.onSaveInstanceState(outState) }
     private val Int.dp get() = (this*resources.displayMetrics.density).toInt()
 }

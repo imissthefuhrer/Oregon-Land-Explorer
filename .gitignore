@@ -17,3 +17,5 @@ android/app/src/main/assets/glyphs/
 android/app/src/androidTest/assets/
 *.p12
 *.jks
+*.sqlite
+*.sqlite-*

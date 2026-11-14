@@ -1,5 +1,9 @@
 # Expanded offline Android maps
 
+For the disk-backed parcel update, schema 3 packages and upgrade instructions,
+see [parcel storage](parcel-storage.md). The PR #4 implementation and its measured
+baseline below are retained as the known-good fallback and comparison record.
+
 This implementation starts at PR #3 commit `384fa25653ce2348589b583e926da7d60ffcabd4`,
 which the user installed and tested on a physical phone. The original branch and
 its APK are preserved. [Prototype architecture/evidence](offline-android-prototype.md).

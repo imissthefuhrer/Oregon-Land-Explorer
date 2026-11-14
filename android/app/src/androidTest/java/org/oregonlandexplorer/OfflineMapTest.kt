@@ -52,7 +52,7 @@ class OfflineMapTest {
             // Vector snapshot must contain styled land, roads and labels with parcels hidden.
             scenario.onActivity { activity ->
                 activity.map!!.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(45.108,-122.897),15.0))
-                for(name in listOf("parcel-fill","parcel-line")) activity.map!!.style!!.getLayer(name)!!.setProperties(visibility("none"))
+                for(name in activity.region!!.parcelLayerIds) activity.map!!.style!!.getLayer(name)!!.setProperties(visibility("none"))
             }
             Thread.sleep(7000)
             val latch=CountDownLatch(1)
@@ -74,23 +74,37 @@ class OfflineMapTest {
             assertTrue("Map labels must be visibly rendered ($darkLabelPixels dark pixels)",darkLabelPixels>100)
             var expectedTaxlot=""
             var expectedOwner=""
+            val installed=Region(context)
+            val testPoint=installed.manifest.getJSONObject("selection_test")
+            val expected=installed.select(testPoint.getDouble("latitude"),testPoint.getDouble("longitude")).first()
+            expectedTaxlot=expected.getStringProperty("TAXLOT")
+            expectedOwner=expected.getStringProperty("OWNERNAME") ?: "Not available"
             var clickX=0
             var clickY=0
             scenario.onActivity { activity ->
-                for(name in listOf("parcel-fill","parcel-line")) activity.map!!.style!!.getLayer(name)!!.setProperties(visibility("visible"))
+                for(name in activity.region!!.parcelLayerIds) activity.map!!.style!!.getLayer(name)!!.setProperties(visibility("visible"))
             }
             Thread.sleep(1500)
+            scenario.onActivity { activity ->
+                // The representative selection point is inside a 481 x 1176 m
+                // parcel; at zoom 18 its boundary is legitimately off-screen.
+                // Check linework here at the town overview, where edges are visible.
+                val rect=android.graphics.RectF(0f,0f,activity.mapView.width.toFloat(),activity.mapView.height.toFloat())
+                val lines=activity.region!!.parcelLayerIds.filter { it.startsWith("parcel-line") }.toTypedArray()
+                assertTrue("Native parcel boundary linework must render",activity.map!!.queryRenderedFeatures(rect,*lines).isNotEmpty())
+            }
             device.executeShellCommand("screencap -p /sdcard/Download/ole-evidence/offline-boundaries.png")
             scenario.onActivity { activity ->
                 val test=activity.region!!.manifest.getJSONObject("selection_test")
-                val feature=activity.region!!.parcels.features()!!.first { it.getNumberProperty("OBJECTID").toLong()==test.getLong("id") }
-                expectedTaxlot=feature.getStringProperty("TAXLOT")
-                expectedOwner=feature.getStringProperty("OWNERNAME") ?: "Not available"
                 activity.map!!.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(test.getDouble("latitude"),test.getDouble("longitude")),18.0))
             }
             Thread.sleep(3000)
             scenario.onActivity { activity ->
                 val test=activity.region!!.manifest.getJSONObject("selection_test")
+                val rect=android.graphics.RectF(0f,0f,activity.mapView.width.toFloat(),activity.mapView.height.toFloat())
+                val fills=activity.region!!.parcelLayerIds.filter { it.startsWith("parcel-fill") }.toTypedArray()
+                val visible=activity.map!!.queryRenderedFeatures(rect,*fills)
+                assertTrue("Exact popup must correspond to a natively rendered parcel polygon",visible.any { it.getStringProperty("parcel_key")==expected.getStringProperty("parcel_key") })
                 val p=activity.map!!.projection.toScreenLocation(LatLng(test.getDouble("latitude"),test.getDouble("longitude")))
                 val offset=IntArray(2);activity.mapView.getLocationOnScreen(offset)
                 clickX=p.x.toInt()+offset[0]; clickY=p.y.toInt()+offset[1]
@@ -106,9 +120,21 @@ class OfflineMapTest {
             scenario.onActivity { it.map!!.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(44.7,-123.2),15.0)) }
             Thread.sleep(1500)
             onView(withText(containsString("Area not downloaded"))).check(matches(isDisplayed()))
-            scenario.recreate()
-            Thread.sleep(5000)
-            scenario.onActivity { assertTrue("Restart did not reload local region",it.ready) }
+            repeat(5) { iteration ->
+                scenario.recreate()
+                var rendered=false
+                val restartDeadline=System.currentTimeMillis()+30000
+                while(!rendered && System.currentTimeMillis()<restartDeadline) {
+                    scenario.onActivity { rendered=it.ready && it.mapReadyMs>0 }
+                    Thread.sleep(100)
+                }
+                assertTrue("Restart $iteration did not render the local region",rendered)
+                scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED)
+                // Android can deliver a memory trim after the GL surface stops.
+                scenario.onActivity { it.onTrimMemory(android.content.ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN) }
+                scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+                Thread.sleep(1000)
+            }
         }
     }
 }

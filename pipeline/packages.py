@@ -17,7 +17,7 @@ def sha(path):
 def finish(root, config, kind, **extra):
     root = Path(root)
     manifest = {**config, 'schema_version': 2, 'kind': kind, 'revision': config.get('revision', 1),
-                'extracted_at': datetime.now(timezone.utc).isoformat(), **extra,
+                'extracted_at': config.get('extracted_at', datetime.now(timezone.utc).isoformat()), **extra,
                 'sha256': {p.name: sha(p) for p in sorted(root.iterdir()) if p.name != 'manifest.json'}}
     (root/'manifest.json').write_text(json.dumps(manifest, indent=2))
     with zipfile.ZipFile(root.parent/(config['id']+'.olepack'), 'w', zipfile.ZIP_DEFLATED) as z:

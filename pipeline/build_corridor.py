@@ -93,12 +93,15 @@ def main():
     for region in config['parcel_regions']:
         build_parcels({**region,'revision':config['revision']},out)
     split_baseline(args.baseline,out)
+    from .parcel_tiles import optimize
+    for region in [*config['parcel_regions'], {'id': 'gervais-original-parcels'}]:
+        optimize(out/region['id'], revision=config['revision'])
     # Only vector and original parcels are core assets; broader regions remain separate downloads.
     assets=Path('android/app/src/main/assets'); (assets/'packs').mkdir(parents=True,exist_ok=True)
     for id in [config['id'],'gervais-original-parcels']:
         shutil.copyfile(out/(id+'.olepack'),assets/'packs'/(id+'.olepack'))
     tests=Path('android/app/src/androidTest/assets/test-packs');tests.mkdir(parents=True,exist_ok=True)
-    for name in ['silver-falls','gervais-original-aerial']:
+    for name in ['gervais-countryside','silver-falls','gervais-original-parcels','gervais-original-aerial']:
         shutil.copyfile(out/(name+'.olepack'),tests/(name+'.olepack'))
     font=work/'fonts.zip'
     urllib.request.urlretrieve('https://github.com/openmaptiles/fonts/releases/download/v2.0/noto-sans.zip',font)
