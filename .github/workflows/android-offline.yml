@@ -15,6 +15,8 @@ jobs:
     timeout-minutes: 55
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -35,73 +37,24 @@ jobs:
       - name: Compile app and instrumentation before GIS extraction
         working-directory: android
         run: gradle --no-daemon :app:compileDebugKotlin :app:compileDebugAndroidTestKotlin
-      - uses: actions/cache/restore@v4
-        id: tilemaker-cache
-        with:
-          path: /tmp/tilemaker
-          key: tilemaker-noble-v3.2.0-1
-      - name: Build pinned Tilemaker and install Osmium
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y osmium-tool libboost-dev libboost-filesystem-dev libboost-program-options-dev libboost-system-dev lua5.3 liblua5.3-dev libshp-dev libsqlite3-dev rapidjson-dev
-          if [ ! -x /tmp/tilemaker/tilemaker ]; then
-            git clone --depth 1 --branch v3.2.0 https://github.com/systemed/tilemaker.git /tmp/tilemaker
-            make -C /tmp/tilemaker -j2 tilemaker
-          fi
-          sudo install /tmp/tilemaker/tilemaker /usr/local/bin/tilemaker
-      - uses: actions/cache/save@v4
-        if: steps.tilemaker-cache.outputs.cache-hit != 'true'
-        with:
-          path: /tmp/tilemaker
-          key: tilemaker-noble-v3.2.0-1
-      - name: Retrieve verified PR 3 package without regenerating it
+      - name: Retrieve pinned PR 4 inputs and preserve baseline source
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release download verified-prototype-v1 --pattern app-debug.apk --pattern gervais.olepack --dir work/baseline
-          echo 'd870b8e074b8e24518175cf0fe65fbe5629892c64f397a45129e57a11de2b7bc  work/baseline/app-debug.apk' | sha256sum -c
-          echo '85ae617d402f9d6f3e13c9181eee4579478f5203d2cb2ff8bb7588b9410e1474  work/baseline/gervais.olepack' | sha256sum -c
-      - id: snapshot
-        run: echo "day=$(date -u +%F)" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache/restore@v4
-        id: osm-cache
-        with:
-          path: work/vector/oregon.osm.pbf
-          key: geofabrik-oregon-${{ steps.snapshot.outputs.day }}
-      - uses: actions/cache/restore@v4
-        id: prepared-cache
-        with:
-          key: prepared-regions-v1-${{ steps.snapshot.outputs.day }}-${{ hashFiles('pipeline/**', 'regions/**') }}
-          path: |
-            output/*/
-            output/*.olepack
-            output/storage.json
-            output/vector-validation.json
-            android/app/src/main/assets/packs/
-            android/app/src/main/assets/glyphs/
-            android/app/src/androidTest/assets/
-      - name: Build continuous vector and independent parcel packages
-        if: steps.prepared-cache.outputs.cache-hit != 'true'
-        run: python -m pipeline.build_corridor --baseline work/baseline/gervais.olepack
-      - uses: actions/cache/save@v4
-        if: ${{ !cancelled() && steps.osm-cache.outputs.cache-hit != 'true' && hashFiles('work/vector/source-verified.txt') != '' }}
-        with:
-          path: work/vector/oregon.osm.pbf
-          key: geofabrik-oregon-${{ steps.snapshot.outputs.day }}
-      - name: Audit all parcel fingerprints
+          mkdir -p work/expanded work/baseline-source
+          gh release download expanded-v0.2 --pattern '*.olepack' --pattern oregon-land-explorer-expanded.apk --dir work/expanded
+          python scripts/verify-expanded-inputs.py
+          git archive e61cbef399f376f8d7f68fb48f8eb17c455d5a7f | tar -x -C work/baseline-source
+          mkdir -p work/baseline-source/android/app/src/androidTest/assets/test-packs
+          cp work/expanded/*.olepack work/baseline-source/android/app/src/androidTest/assets/test-packs/
+          cp android/app/src/androidTest/java/org/oregonlandexplorer/ParcelPerformanceTest.kt work/baseline-source/android/app/src/androidTest/java/org/oregonlandexplorer/
+      - name: Convert identical source extracts to schema 3
+        run: python -m pipeline.optimize_release --source work/expanded
+      - name: Audit exact rows, fingerprints, tile identities, geometry and checksums
         run: python -m pipeline.validate_packages
-      - uses: actions/cache/save@v4
-        if: steps.prepared-cache.outputs.cache-hit != 'true'
-        with:
-          key: prepared-regions-v1-${{ steps.snapshot.outputs.day }}-${{ hashFiles('pipeline/**', 'regions/**') }}
-          path: |
-            output/*/
-            output/*.olepack
-            output/storage.json
-            output/vector-validation.json
-            android/app/src/main/assets/packs/
-            android/app/src/main/assets/glyphs/
-            android/app/src/androidTest/assets/
+      - name: Compile identical benchmark against unchanged PR 4
+        working-directory: work/baseline-source/android
+        run: gradle --no-daemon :app:assembleDebugAndroidTest
       - name: Restore stable expanded-app signing key
         env:
           OLE_SIGNING_KEY: ${{ secrets.OLE_SIGNING_KEY }}
@@ -120,12 +73,12 @@ jobs:
         run: |
           mkdir -p output/delivery
           cp android/app/build/outputs/apk/debug/app-debug.apk output/delivery/
-          cp output/*.olepack output/storage.json output/vector-validation.json output/packages-validation.json output/apk-validation.json output/delivery/
+          cp output/*.olepack output/storage.json output/packages-validation.json output/apk-validation.json output/delivery/
           cd output/delivery && sha256sum *.apk *.olepack > SHA256SUMS.txt
       - name: Upload APK and map packages
         uses: actions/upload-artifact@v4
         with:
-          name: oregon-land-explorer-expanded
+          name: oregon-land-explorer-optimized-preview
           path: output/delivery/
           retention-days: 30
           if-no-files-found: error
@@ -158,11 +111,16 @@ jobs:
             adb shell svc wifi disable
             adb shell svc data disable
             adb shell settings put global airplane_mode_on 1
-            python scripts/benchmark-android.py
+            bash scripts/benchmark-parcels.sh
             adb shell mkdir -p /sdcard/Download
             adb push output/gervais-countryside.olepack /sdcard/Download/gervais-countryside.olepack
             adb push output/silver-falls.olepack /sdcard/Download/silver-falls.olepack
-            bash scripts/test-emulator.sh
+            # Performance already executed separately against each APK.
+            cd android
+            gradle --no-daemon :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.notClass=org.oregonlandexplorer.ParcelPerformanceTest
+            cd ..
+            adb pull /sdcard/Download/ole-evidence/. output/emulator-screenshots/
+            python scripts/summarize-parcel-performance.py
       - name: Upload test evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -174,7 +132,10 @@ jobs:
             output/packages-validation.json
             output/storage.json
             output/memory.txt
-            output/performance.json
+            output/*performance*.json
+            output/*instrumentation.txt
+            output/*cold*.txt
+            output/*/parcel-validation.json
             output/*-memory-*.txt
             output/*-gfx.txt
             output/emulator-screenshots/

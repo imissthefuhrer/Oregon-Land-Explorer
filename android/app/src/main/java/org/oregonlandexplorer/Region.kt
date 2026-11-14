@@ -11,10 +11,11 @@ class Region(private val context: Context) {
     val store=PackageStore(context)
     val packages: List<MapPackage>
     val manifest: JSONObject
-    val parcels: FeatureCollection
+    val parcelPackages: List<MapPackage>
+    val legacyPackages: List<MapPackage> get()=parcelPackages.filter { !it.tiled }
+    val parcelLayerIds: List<String> get()=listOf("parcel-fill","parcel-line","selected-line")+parcelPackages.filter { it.tiled }.flatMap { listOf("parcel-fill-${it.id}","parcel-line-${it.id}") }
     private val base: MapPackage
     private val bases: List<MapPackage>
-    private val parcelPackages: List<MapPackage>
     init {
         store.installBundled()
         packages=store.installed()
@@ -22,13 +23,36 @@ class Region(private val context: Context) {
         bases=active.filter { it.kind=="vector" }
         base=active.firstOrNull { it.kind=="vector" } ?: error("Enable an installed vector basemap")
         parcelPackages=active.filter { it.kind in listOf("parcels","legacy") }
-        val unique=LinkedHashMap<Long,Feature>()
-        for(pack in parcelPackages.sortedBy { java.time.Instant.parse(it.manifest.getString("extracted_at")) }) {
-            for(feature in pack.parcels().features() ?: emptyList()) unique[feature.getNumberProperty("OBJECTID").toLong()]=feature
-        }
-        parcels=FeatureCollection.fromFeatures(unique.values.toList())
-        manifest=JSONObject(base.manifest.toString()).put("parcel_count",unique.size)
+        for(pack in legacyPackages) pack.legacyParcelFile=ParcelDatabase.prepareLegacy(pack,java.io.File(context.filesDir,"parcel-indexes"))
+        manifest=JSONObject(base.manifest.toString()).put("parcel_count",parcelPackages.sumOf { it.manifest.getInt("parcel_count") })
         parcelPackages.firstOrNull()?.manifest?.optJSONObject("selection_test")?.let { manifest.put("selection_test",it) }
+    }
+    /** Resolve identity freshness BEFORE the exact hit test, so moved newer parcels
+     * cannot resurrect a stale boundary from an overlapping older region. */
+    fun select(latitude: Double, longitude: Double): List<Feature> {
+        if(!containsParcel(latitude,longitude)) return emptyList()
+        val ordered=parcelPackages.sortedWith(compareByDescending<MapPackage> { java.time.Instant.parse(it.manifest.getString("extracted_at")) }.thenBy { it.id })
+        val keys=ordered.filter { it.contains(latitude,longitude) }.flatMap { ParcelDatabase.candidates(it,latitude,longitude) }.toSet()
+        require(keys.size<=256) { "Too many overlapping parcel candidates" }
+        return keys.mapNotNull { key ->
+            val pair=ordered.firstNotNullOfOrNull { pack -> ParcelDatabase.lookup(pack,key)?.let { pack to it } }
+            pair?.takeIf { ParcelDatabase.contains(it.second,latitude,longitude) }?.let { (pack,feature) ->
+                feature.addStringProperty("source_extracted_at",pack.manifest.getString("extracted_at"))
+                feature.addStringProperty("source_package",pack.manifest.getString("name"))
+                feature
+            }
+        }
+    }
+    fun legacyViewport(bounds: DoubleArray): FeatureCollection {
+        val unique=LinkedHashMap<String,Feature>();var bytes=0
+        for(pack in legacyPackages.sortedBy { java.time.Instant.parse(it.manifest.getString("extracted_at")) }) {
+            for(f in ParcelDatabase.viewport(pack,bounds)) {
+                bytes+=f.toJson().length
+                require(unique.size<1000 && bytes<=2*1024*1024) { "Legacy parcel view is dense; zoom in or install schema 3 package" }
+                unique[f.getStringProperty("parcel_key")]=f
+            }
+        }
+        return FeatureCollection.fromFeatures(unique.values.toList())
     }
     fun contains(latitude: Double,longitude: Double)=bases.any { it.contains(latitude,longitude) }
     fun containsParcel(latitude: Double,longitude: Double)=parcelPackages.any { it.contains(latitude,longitude) }
@@ -57,6 +81,14 @@ class Region(private val context: Context) {
                 style.getJSONObject("sources").put(source,JSONObject().put("type","raster").put("tileSize",256).put("url",pack.url("aerial.pmtiles")))
                 layers.put(JSONObject().put("id",source).put("type","raster").put("source",source).put("paint",JSONObject().put("raster-fade-duration",0)))
             }
+        }
+        for(pack in parcelPackages.filter { it.tiled }) {
+            val source="parcels-${pack.id}"
+            style.getJSONObject("sources").put(source,JSONObject().put("type","vector").put("url",pack.url("parcels.pmtiles")))
+            style.getJSONArray("layers").put(JSONObject().put("id","parcel-fill-${pack.id}").put("type","fill").put("source",source).put("source-layer","parcels").put("minzoom",12)
+                .put("paint",JSONObject().put("fill-color","#ffb547").put("fill-opacity",0.025)))
+            style.getJSONArray("layers").put(JSONObject().put("id","parcel-line-${pack.id}").put("type","line").put("source",source).put("source-layer","boundaries").put("minzoom",12)
+                .put("paint",JSONObject().put("line-color","#b27a25").put("line-width",1.1)))
         }
         return style.toString()
     }

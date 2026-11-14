@@ -52,7 +52,7 @@ class OfflineMapTest {
             // Vector snapshot must contain styled land, roads and labels with parcels hidden.
             scenario.onActivity { activity ->
                 activity.map!!.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(45.108,-122.897),15.0))
-                for(name in listOf("parcel-fill","parcel-line")) activity.map!!.style!!.getLayer(name)!!.setProperties(visibility("none"))
+                for(name in activity.region!!.parcelLayerIds) activity.map!!.style!!.getLayer(name)!!.setProperties(visibility("none"))
             }
             Thread.sleep(7000)
             val latch=CountDownLatch(1)
@@ -74,18 +74,20 @@ class OfflineMapTest {
             assertTrue("Map labels must be visibly rendered ($darkLabelPixels dark pixels)",darkLabelPixels>100)
             var expectedTaxlot=""
             var expectedOwner=""
+            val installed=Region(context)
+            val testPoint=installed.manifest.getJSONObject("selection_test")
+            val expected=installed.select(testPoint.getDouble("latitude"),testPoint.getDouble("longitude")).first()
+            expectedTaxlot=expected.getStringProperty("TAXLOT")
+            expectedOwner=expected.getStringProperty("OWNERNAME") ?: "Not available"
             var clickX=0
             var clickY=0
             scenario.onActivity { activity ->
-                for(name in listOf("parcel-fill","parcel-line")) activity.map!!.style!!.getLayer(name)!!.setProperties(visibility("visible"))
+                for(name in activity.region!!.parcelLayerIds) activity.map!!.style!!.getLayer(name)!!.setProperties(visibility("visible"))
             }
             Thread.sleep(1500)
             device.executeShellCommand("screencap -p /sdcard/Download/ole-evidence/offline-boundaries.png")
             scenario.onActivity { activity ->
                 val test=activity.region!!.manifest.getJSONObject("selection_test")
-                val feature=activity.region!!.parcels.features()!!.first { it.getNumberProperty("OBJECTID").toLong()==test.getLong("id") }
-                expectedTaxlot=feature.getStringProperty("TAXLOT")
-                expectedOwner=feature.getStringProperty("OWNERNAME") ?: "Not available"
                 activity.map!!.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(test.getDouble("latitude"),test.getDouble("longitude")),18.0))
             }
             Thread.sleep(3000)

@@ -15,7 +15,10 @@ def validate(root):
         assert set(archive.namelist())==set(m['sha256'])|{'manifest.json'}
         for p in root.iterdir(): assert archive.read(p.name)==p.read_bytes()
     result={'id':m['id'],'kind':m['kind'],'bbox':m['bbox'],'checksums':'PASS'}
-    if m['kind']=='parcels':
+    if m['kind']=='parcels' and m['schema_version']==3:
+        from .parcel_tiles import validate_optimized
+        result.update(validate_optimized(root,m))
+    elif m['kind']=='parcels':
         data=json.loads((root/'parcels.geojson').read_text())['features']
         audit=json.loads((root/'source-record-hashes.json').read_text())
         ids=[str(f['properties']['OBJECTID']) for f in data]

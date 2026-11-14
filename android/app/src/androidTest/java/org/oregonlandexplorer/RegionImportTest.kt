@@ -167,6 +167,7 @@ class RegionImportTest {
                 val p=a.region!!.packages.first { it.id=="gervais-original-parcels" }.manifest.getJSONObject("selection_test")
                 assertTrue("Optional aerial must retain parcel selection",a.selectParcel(LatLng(p.getDouble("latitude"),p.getDouble("longitude"))))
             }
+            assertTrue(device.wait(Until.hasObject(By.text("Property details")),10000))
             onView(withText("Property details")).check(matches(isDisplayed()))
             device.executeShellCommand("screencap -p /sdcard/Download/ole-evidence/optional-aerial-parcel.png")
             device.pressBack()
