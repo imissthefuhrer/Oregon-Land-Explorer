@@ -71,7 +71,7 @@ jobs:
       - name: Build continuous vector and independent parcel packages
         run: python -m pipeline.build_corridor --baseline work/baseline/gervais.olepack
       - uses: actions/cache/save@v4
-        if: ${{ !cancelled() && steps.osm-cache.outputs.cache-hit != 'true' && hashFiles('work/vector/source-info.json') != '' }}
+        if: ${{ !cancelled() && steps.osm-cache.outputs.cache-hit != 'true' && hashFiles('work/vector/source-verified.txt') != '' }}
         with:
           path: work/vector/oregon.osm.pbf
           key: geofabrik-oregon-${{ steps.snapshot.outputs.day }}

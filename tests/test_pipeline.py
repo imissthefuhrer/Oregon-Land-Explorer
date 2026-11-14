@@ -94,3 +94,22 @@ def test_requested_topology_repair_retains_source_and_owner_audit():
     assert f['properties']['OWNERNAME']=='Synthetic test'
     assert f['properties']['geometry_repair_note']
     assert record['display_boundary_outside_source_buffer_degrees']<=1e-7
+
+
+def test_overlapping_source_parts_remove_internal_edges_with_audit():
+    from shapely.geometry import shape
+    base,_=service(count=1)
+    def request(url,p):
+        result=base(url,p)
+        if 'features' in result:
+            result['features'][0]['geometry']={'type':'MultiPolygon','coordinates':[
+                [[[0,0],[2,0],[2,2],[0,2],[0,0]]],
+                [[[1,1],[3,1],[3,3],[1,3],[1,1]]]]}
+        return result
+    data,audit=extract([0,0,3,3],10,request,repair_invalid=True)
+    f=data['features'][0];r=audit['0']
+    assert shape(f['geometry']).is_valid
+    assert r['source_area_degrees2']==8 and r['display_area_degrees2']==7
+    assert r['source_display_boundary_hausdorff_degrees']>1e-6
+    assert r['display_boundary_outside_source_buffer_degrees']==0
+    assert fingerprint({**f,'geometry':r['source_geometry']})==r['source_sha256']

@@ -71,9 +71,13 @@ def main():
     # Official bulk download; never any request to OSM's public tile infrastructure.
     url='https://download.geofabrik.de/north-america/us/oregon-latest.osm.pbf'
     source=work/'oregon.osm.pbf'
-    if not source.exists(): urllib.request.urlretrieve(url,source)
+    if not source.exists():
+        temporary=work/'oregon.download'
+        urllib.request.urlretrieve(url,temporary)
+        temporary.rename(source)
     with (work/'source-info.json').open('w') as info:
         subprocess.run(['osmium','fileinfo','-e','-j',str(source)],stdout=info,check=True)
+    (work/'source-verified.txt').write_text('osmium fileinfo succeeded')
     # Buffer and smart multipolygon completion protect boundary roads/park grounds.
     w,s,e,n=config['bbox']; buffer=[w-.04,s-.04,e+.04,n+.04]
     run('osmium','extract','-b',','.join(map(str,buffer)),'-s','smart',source,'-o',work/'extract.osm.pbf','--overwrite')
