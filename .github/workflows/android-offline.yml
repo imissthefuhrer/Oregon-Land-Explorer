@@ -129,13 +129,7 @@ jobs:
             adb shell mkdir -p /sdcard/Download
             adb push output/gervais-countryside.olepack /sdcard/Download/gervais-countryside.olepack
             adb push output/silver-falls.olepack /sdcard/Download/silver-falls.olepack
-            cd android && gradle --no-daemon :app:connectedDebugAndroidTest
-      - name: Collect emulator evidence
-        if: always()
-        run: |
-          mkdir -p output/emulator-screenshots
-          adb pull /sdcard/Download/ole-evidence/. output/emulator-screenshots/ || true
-          adb shell dumpsys meminfo org.oregonlandexplorer.expanded > output/memory.txt || true
+            bash scripts/test-emulator.sh
       - name: Upload test evidence
         if: always()
         uses: actions/upload-artifact@v4

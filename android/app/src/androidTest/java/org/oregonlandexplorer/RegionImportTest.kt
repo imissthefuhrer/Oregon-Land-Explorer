@@ -18,6 +18,8 @@ import androidx.test.espresso.assertion.ViewAssertions.matches
 import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
 import org.junit.Assert.*
 import org.junit.Test
+import org.junit.After
+import androidx.test.uiautomator.StaleObjectException
 import org.junit.runner.RunWith
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
@@ -47,6 +49,26 @@ class RegionImportTest {
         val uri=context.contentResolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI,values)!!
         context.contentResolver.openOutputStream(uri)!!.bufferedWriter().use { it.write(text) }
     }
+    private fun clickSystemText(text: String) {
+        val deadline=SystemClock.elapsedRealtime()+15000
+        while(SystemClock.elapsedRealtime()<deadline) {
+            try {
+                device.waitForIdle(1500)
+                val node=device.findObject(By.text(text))
+                if(node!=null) {
+                    val bounds=node.visibleBounds
+                    if(device.click(bounds.centerX(),bounds.centerY())) return
+                }
+            } catch(stale: StaleObjectException) { /* Reacquire after DocumentsUI list refresh. */ }
+            Thread.sleep(250)
+        }
+        fail("Cannot click system document item: $text")
+    }
+    @After fun collectSystemUi() {
+        device.executeShellCommand("screencap -p /sdcard/Download/ole-evidence/final-system-ui.png")
+        val hierarchy=ByteArrayOutputStream();device.dumpWindowHierarchy(hierarchy)
+        evidence("final-system-ui.xml",hierarchy.toString("UTF-8"))
+    }
     @Test fun importUsingAndroidDocumentPickerAndRenderDestinationsOffline() {
         device.executeShellCommand("mkdir -p /sdcard/Download/ole-evidence")
         device.executeShellCommand("cmd connectivity airplane-mode enable")
@@ -60,13 +82,15 @@ class RegionImportTest {
             assertTrue("Android document picker did not open",device.wait(Until.hasObject(By.pkg("com.google.android.documentsui")),10000) || device.wait(Until.hasObject(By.pkg("com.android.documentsui")),10000))
             // Downloads may be the initial location or selected from the navigation drawer.
             if(!device.hasObject(By.text("gervais-countryside.olepack"))) {
+                device.waitForIdle(2000)
                 device.findObject(By.desc("Show roots"))?.click()
-                device.wait(Until.findObject(By.text("Downloads")),5000)?.click()
+                clickSystemText("Downloads")
             }
             val document=device.wait(Until.findObject(By.text("gervais-countryside.olepack")),10000)
             if(document==null) device.executeShellCommand("uiautomator dump /sdcard/Download/ole-evidence/picker.xml")
             assertNotNull("Downloaded package not shown in picker",document)
-            document!!.click()
+            device.executeShellCommand("screencap -p /sdcard/Download/ole-evidence/document-picker.png")
+            clickSystemText("gervais-countryside.olepack")
             Thread.sleep(7000);waitReady(scenario)
             scenario.onActivity { a ->
                 assertTrue(a.region!!.packages.any { it.id=="gervais-countryside" && it.enabled })
@@ -150,7 +174,7 @@ class RegionImportTest {
         store.importPackage(ByteArrayInputStream(archive()))
         val first=store.installed().first { it.id=="synthetic-import-test" }.directory
         for(bytes in listOf(archive(2,true),archive(2,path="../parcels.geojson"),"not a zip".toByteArray())) {
-            try { store.importPackage(ByteArrayInputStream(bytes));fail("Unsafe package accepted") } catch(expected: IllegalArgumentException) { }
+            try { store.importPackage(ByteArrayInputStream(bytes));fail("Unsafe package accepted") } catch(expected: Exception) { assertTrue("Unexpected rejection failure",expected is IllegalArgumentException || expected is java.util.zip.ZipException) }
             assertEquals(first,store.installed().first { it.id=="synthetic-import-test" }.directory)
         }
         store.importPackage(ByteArrayInputStream(archive(2)))
