@@ -91,7 +91,13 @@ class RegionImportTest {
             assertNotNull("Downloaded package not shown in picker",document)
             device.executeShellCommand("screencap -p /sdcard/Download/ole-evidence/document-picker.png")
             clickSystemText("gervais-countryside.olepack")
-            Thread.sleep(7000);waitReady(scenario)
+            val importDeadline=SystemClock.elapsedRealtime()+90000
+            var imported=false
+            while(!imported && SystemClock.elapsedRealtime()<importDeadline) {
+                scenario.onActivity { a -> imported=a.ready && a.region?.packages?.any { it.id=="gervais-countryside" && it.enabled }==true }
+                Thread.sleep(250)
+            }
+            assertTrue("Document import did not activate the validated package",imported)
             scenario.onActivity { a ->
                 assertTrue(a.region!!.packages.any { it.id=="gervais-countryside" && it.enabled })
                 assertTrue(a.region!!.containsParcel(45.13,-122.947))
