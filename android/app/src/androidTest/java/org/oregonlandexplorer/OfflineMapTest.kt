@@ -129,6 +129,11 @@ class OfflineMapTest {
                     Thread.sleep(100)
                 }
                 assertTrue("Restart $iteration did not render the local region",rendered)
+                scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED)
+                // Android can deliver a memory trim after the GL surface stops.
+                scenario.onActivity { it.onTrimMemory(android.content.ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN) }
+                scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+                Thread.sleep(1000)
             }
         }
     }

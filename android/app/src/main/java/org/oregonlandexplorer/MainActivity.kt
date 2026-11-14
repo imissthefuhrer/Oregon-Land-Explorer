@@ -49,6 +49,8 @@ class MainActivity : AppCompatActivity(), LocationListener {
     private var viewportGeneration=0L
     private var parcelLoadNote=""
     @Volatile var lastSelectionMs=0L
+    private var tilePolicyApplied=false
+    private var rendererResumed=false
     @Volatile var mapReadyMs=0L
     private val launchedAt=android.os.SystemClock.elapsedRealtime()
     private var destroyed=false
@@ -110,11 +112,10 @@ class MainActivity : AppCompatActivity(), LocationListener {
             loaded.setMaxZoomPreference(19.0)
             // Map-ready can precede native renderer creation during recreation.
             // Renderer-dependent cache policy belongs after its first complete frame.
-            var tilePolicyApplied=false
             loaded.addOnCameraMoveStartedListener { _ -> parcelGeneration++;viewportGeneration++ }
             loaded.addOnCameraIdleListener { updateStatus();loadLegacyViewport() }
             mapView.addOnDidFinishRenderingMapListener { fully ->
-                if(fully && !destroyed) {
+                if(fully && rendererResumed && !destroyed) {
                     if(!tilePolicyApplied) {
                         tilePolicyApplied=true
                         loaded.setPrefetchZoomDelta(PARCEL_PREFETCH_ZOOM_DELTA)
@@ -378,18 +379,18 @@ class MainActivity : AppCompatActivity(), LocationListener {
         else locationStatus.text="Location permission denied · map still works offline"
     }
     override fun onStart() { super.onStart(); mapView.onStart(); connectivity.registerDefaultNetworkCallback(networkCallback); networkRegistered=true }
-    override fun onResume() { super.onResume(); mapView.onResume(); startGps() }
-    override fun onPause() { locations.removeUpdates(this); mapView.onPause(); super.onPause() }
+    override fun onResume() { super.onResume();tilePolicyApplied=false;rendererResumed=true;mapView.onResume(); startGps() }
+    override fun onPause() { rendererResumed=false;locations.removeUpdates(this); mapView.onPause(); super.onPause() }
     override fun onStop() { if(networkRegistered) { connectivity.unregisterNetworkCallback(networkCallback); networkRegistered=false }; mapView.onStop(); super.onStop() }
     override fun onDestroy() { destroyed=true;parcelGeneration++;viewportGeneration++;parcelWork.shutdownNow();legacyWork.shutdownNow();mapView.onDestroy();super.onDestroy() }
-    override fun onTrimMemory(level: Int) { super.onTrimMemory(level);if(level>=android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) { mapView.onLowMemory();LocalTiles.trim() } }
+    override fun onTrimMemory(level: Int) { super.onTrimMemory(level);if(level>=android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) { if(rendererResumed && tilePolicyApplied && !destroyed) mapView.onLowMemory();LocalTiles.trim() } }
     companion object {
         // Native prefetch is a zoom delta, not a geographic ring. Zero avoids an
         // extra lower-zoom tile pyramid on low-memory phones. Tune only with evidence.
         const val PARCEL_PREFETCH_ZOOM_DELTA=0
         const val LEGACY_PREFETCH_MARGIN=0.10
     }
-    override fun onLowMemory() { super.onLowMemory(); mapView.onLowMemory();LocalTiles.trim() }
+    override fun onLowMemory() { super.onLowMemory(); if(rendererResumed && tilePolicyApplied && !destroyed) mapView.onLowMemory();LocalTiles.trim() }
     override fun onSaveInstanceState(outState: Bundle) { super.onSaveInstanceState(outState); mapView.onSaveInstanceState(outState) }
     private val Int.dp get() = (this*resources.displayMetrics.density).toInt()
 }
