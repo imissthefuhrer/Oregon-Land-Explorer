@@ -145,3 +145,17 @@ latency; UI statistics are not a full native map GPU benchmark. Extents differ.
 Physical-phone GPU performance, GNSS acquisition and home coverage still require
 phone verification. The first prototype's physical-phone acceptance does not
 verify this expanded build. Final measured results are recorded separately after CI.
+
+The St. Louis Ponds shortcut uses ODFW's documented site near
+`45.114,-122.932`, rather than the St. Louis settlement farther north.
+[ODFW site-location record](https://nrimp.dfw.state.or.us/RE/pdf/2853.pdf).
+This is a public destination coordinate, not a home location.
+
+### Emulator graphics
+
+MapLibre 12.0.1 is preserved from the verified prototype. SwiftShader can make
+its symbols and dashed paths transparent even when feature queries succeed:
+[upstream renderer report](https://github.com/maplibre/maplibre-native/pull/4625).
+Hosted tests use Mesa llvmpipe through Xvfb and the emulator's host OpenGL backend.
+Tests additionally inspect rendered label/trail pixels, not just feature counts.
+No test-only renderer workaround or font/style fallback is injected into the APK.

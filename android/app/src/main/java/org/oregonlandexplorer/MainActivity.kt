@@ -167,7 +167,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
             when(choice) {
                 0 -> home()
                 1 -> go(45.108,-122.897,13.0)
-                2 -> go(45.13,-122.947,15.0)
+                2 -> go(45.114,-122.932,15.0)
                 3 -> go(45.085,-123.045,14.0)
                 4 -> go(44.89,-122.63,13.0)
                 5 -> if(!importing) importer.launch(arrayOf("*/*"))

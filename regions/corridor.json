@@ -1,18 +1,76 @@
 {
   "id": "willamette-silver-outdoors",
-  "name": "Gervais • Willamette • Silver Falls",
-  "bbox": [-123.10, 44.80, -122.48, 45.25],
+  "name": "Gervais \u2022 Willamette \u2022 Silver Falls",
+  "bbox": [
+    -123.1,
+    44.8,
+    -122.48,
+    45.25
+  ],
   "minzoom": 8,
   "maxzoom": 15,
   "revision": 1,
   "parcel_regions": [
-    {"id": "gervais-countryside", "name": "Gervais, St. Louis Ponds & Willamette Mission parcels", "bbox": [-123.10, 45.015, -122.80, 45.22], "max_parcels": 25000},
-    {"id": "silver-falls", "name": "Silver Falls & approaches parcels", "bbox": [-122.76, 44.80, -122.48, 45.02], "max_parcels": 15000}
+    {
+      "id": "gervais-countryside",
+      "name": "Gervais, St. Louis Ponds & Willamette Mission parcels",
+      "bbox": [
+        -123.1,
+        45.015,
+        -122.8,
+        45.22
+      ],
+      "max_parcels": 25000
+    },
+    {
+      "id": "silver-falls",
+      "name": "Silver Falls & approaches parcels",
+      "bbox": [
+        -122.76,
+        44.8,
+        -122.48,
+        45.02
+      ],
+      "max_parcels": 15000
+    }
   ],
   "targets": [
-    {"name": "Gervais countryside", "bbox": [-123.02,45.06,-122.84,45.20]},
-    {"name": "St. Louis Ponds", "bbox": [-122.96,45.115,-122.935,45.145]},
-    {"name": "Willamette Mission State Park", "bbox": [-123.065,45.065,-123.025,45.105]},
-    {"name": "Silver Falls State Park", "bbox": [-122.70,44.81,-122.54,44.99]}
+    {
+      "name": "Gervais countryside",
+      "bbox": [
+        -123.02,
+        45.06,
+        -122.84,
+        45.2
+      ]
+    },
+    {
+      "name": "St. Louis Ponds",
+      "bbox": [
+        -122.95,
+        45.102,
+        -122.922,
+        45.122
+      ],
+      "coordinate_source": "https://nrimp.dfw.state.or.us/RE/pdf/2853.pdf"
+    },
+    {
+      "name": "Willamette Mission State Park",
+      "bbox": [
+        -123.065,
+        45.065,
+        -123.025,
+        45.105
+      ]
+    },
+    {
+      "name": "Silver Falls State Park",
+      "bbox": [
+        -122.7,
+        44.81,
+        -122.54,
+        44.99
+      ]
+    }
   ]
 }

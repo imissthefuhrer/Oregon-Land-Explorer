@@ -100,12 +100,12 @@ class RegionImportTest {
             assertTrue("Document import did not activate the validated package",imported)
             scenario.onActivity { a ->
                 assertTrue(a.region!!.packages.any { it.id=="gervais-countryside" && it.enabled })
-                assertTrue(a.region!!.containsParcel(45.13,-122.947))
+                assertTrue(a.region!!.containsParcel(45.114,-122.932))
             }
             // Independent second region import uses the exact same validated importer.
             PackageStore(context).importPackage(instrumentation.context.assets.open("test-packs/silver-falls.olepack"))
             scenario.recreate();waitReady(scenario)
-            val targets=listOf(Triple("gervais",LatLng(45.108,-122.897),"roads"),Triple("st-louis",LatLng(45.130,-122.947),"roads"),Triple("willamette",LatLng(45.085,-123.045),"trails"),Triple("silver-falls",LatLng(44.877,-122.655),"trails"))
+            val targets=listOf(Triple("gervais",LatLng(45.108,-122.897),"roads"),Triple("st-louis",LatLng(45.114,-122.932),"trails"),Triple("willamette",LatLng(45.085,-123.045),"trails"),Triple("silver-falls",LatLng(44.877,-122.655),"trails"))
             for((name,point,layer) in targets) {
                 scenario.onActivity { a ->
                     assertTrue("Base missing $name",a.region!!.contains(point.latitude,point.longitude))
@@ -116,6 +116,7 @@ class RegionImportTest {
                 scenario.onActivity { a ->
                     val rect=android.graphics.RectF(0f,0f,a.mapView.width.toFloat(),a.mapView.height.toFloat())
                     assertTrue("No rendered $layer at $name",a.map!!.queryRenderedFeatures(rect,layer).isNotEmpty())
+                    if(name=="st-louis") assertTrue("Ponds must have water polygons, not only a place label",a.map!!.queryRenderedFeatures(rect,"water").isNotEmpty())
                     assertTrue("No labels at $name",a.map!!.queryRenderedFeatures(rect,"road-labels","place-labels","park-labels").isNotEmpty())
                 }
                 device.executeShellCommand("screencap -p /sdcard/Download/ole-evidence/$name.png")
@@ -145,12 +146,12 @@ class RegionImportTest {
             locations.addTestProvider(LocationManager.GPS_PROVIDER,false,true,false,false,true,true,true,1,1)
             locations.setTestProviderEnabled(LocationManager.GPS_PROVIDER,true)
             onView(withText("GPS")).perform(click())
-            val location=Location(LocationManager.GPS_PROVIDER).apply { latitude=45.13;longitude= -122.947;accuracy=5f;time=System.currentTimeMillis();elapsedRealtimeNanos=SystemClock.elapsedRealtimeNanos() }
+            val location=Location(LocationManager.GPS_PROVIDER).apply { latitude=45.114;longitude= -122.932;accuracy=5f;time=System.currentTimeMillis();elapsedRealtimeNanos=SystemClock.elapsedRealtimeNanos() }
             locations.setTestProviderLocation(LocationManager.GPS_PROVIDER,location)
             Thread.sleep(2500)
             scenario.onActivity { a ->
-                assertEquals(45.13,a.map!!.cameraPosition.target!!.latitude,0.002)
-                assertTrue(a.map!!.queryRenderedFeatures(a.map!!.projection.toScreenLocation(LatLng(45.13,-122.947)),"gps-dot").isNotEmpty())
+                assertEquals(45.114,a.map!!.cameraPosition.target!!.latitude,0.002)
+                assertTrue(a.map!!.queryRenderedFeatures(a.map!!.projection.toScreenLocation(LatLng(45.114,-122.932)),"gps-dot").isNotEmpty())
             }
             locations.removeTestProvider(LocationManager.GPS_PROVIDER)
             device.executeShellCommand("screencap -p /sdcard/Download/ole-evidence/gps-offline.png")
