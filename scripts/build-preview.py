@@ -1,0 +1,253 @@
+import json
+import urllib.error
+import urllib.parse
+import urllib.request
+from pathlib import Path
+
+output = Path('output')
+output.mkdir(exist_ok=True)
+
+endpoint = (
+    'https://services3.arcgis.com/SXXjryU22GsO8OEC/'
+    'arcgis/rest/services/Parcels/FeatureServer/0/query'
+)
+params = {
+    'where': '1=1',
+    'outFields': 'OBJECTID,TAXLOT,ACRES,OWNERNAME',
+    'returnGeometry': 'true',
+    'outSR': '4326',
+    'resultRecordCount': '10',
+    'orderByFields': 'OBJECTID ASC',
+    'f': 'geojson',
+}
+url = endpoint + '?' + urllib.parse.urlencode(params)
+request = urllib.request.Request(
+    url,
+    headers={'User-Agent': 'OregonLandExplorer/0.1 (personal GIS prototype)'},
+)
+try:
+    with urllib.request.urlopen(request, timeout=60) as response:
+        print('Parcel query HTTP status:', response.status)
+        data = json.load(response)
+except urllib.error.HTTPError as exc:
+    raise RuntimeError(f'Parcel query HTTP {exc.code}') from exc
+
+if 'error' in data:
+    raise RuntimeError('ArcGIS error: ' + json.dumps(data['error']))
+if data.get('type') != 'FeatureCollection':
+    raise RuntimeError('Expected a GeoJSON FeatureCollection')
+features = data.get('features', [])
+if not features:
+    raise RuntimeError('Query returned no parcels')
+if len(features) > 10:
+    raise RuntimeError('Query returned more than the 10 requested parcels')
+for item in features:
+    geom = item.get('geometry') or {}
+    if geom.get('type') not in ('Polygon', 'MultiPolygon'):
+        raise RuntimeError('Missing or unexpected parcel polygon geometry')
+(output / 'parcels.geojson').write_text(
+    json.dumps(data, indent=2), encoding='utf-8'
+)
+
+# Bundle Leaflet and imagery; the resulting HTML needs no network.
+# Keep its MIT license header in the generated preview.
+assets = {}
+for asset in ('leaflet.js', 'leaflet.css', 'LICENSE'):
+    asset_path = asset if asset == 'LICENSE' else 'dist/' + asset
+    asset_url = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/' + asset_path
+    with urllib.request.urlopen(asset_url, timeout=60) as response:
+        assets[asset] = response.read().decode('utf-8')
+
+# Prevent data from breaking the inline JavaScript HTML element.
+embedded_geojson = json.dumps(data).replace('<', '\\u003c')
+
+# Bundle a single aerial photograph in the HTML so the viewer does
+# not have to contact the OSIP imagery server at all.
+import math
+import base64
+RADIUS = 6378137.0
+
+def positions(nested):
+    if isinstance(nested, list):
+        if len(nested) >= 2 and all(isinstance(v, (int, float)) for v in nested[:2]):
+            yield nested[0], nested[1]
+        else:
+            for child in nested:
+                yield from positions(child)
+
+def forward(lon, lat):
+    lat = max(-85.05112878, min(85.05112878, lat))
+    return (
+        RADIUS * math.radians(lon),
+        RADIUS * math.log(math.tan(math.pi / 4 + math.radians(lat) / 2)),
+    )
+
+def inverse(x, y):
+    return (
+        math.degrees(x / RADIUS),
+        math.degrees(2 * math.atan(math.exp(y / RADIUS)) - math.pi / 2),
+    )
+
+pts = []
+for feature in features:
+    pts.extend(positions((feature.get('geometry') or {}).get('coordinates', [])))
+if not pts:
+    raise RuntimeError('No parcel coordinates for aerial extent')
+projected = [forward(lon, lat) for lon, lat in pts]
+x_values, y_values = zip(*projected)
+x_span = max(x_values) - min(x_values)
+y_span = max(y_values) - min(y_values)
+x_pad = max(150, x_span * 0.08)
+y_pad = max(150, y_span * 0.08)
+x_min, x_max = min(x_values) - x_pad, max(x_values) + x_pad
+y_min, y_max = min(y_values) - y_pad, max(y_values) + y_pad
+longest = max(x_max - x_min, y_max - y_min)
+image_width = max(256, round(3072 * (x_max - x_min) / longest))
+image_height = max(256, round(3072 * (y_max - y_min) / longest))
+mercator_bbox = ','.join(f'{v:.3f}' for v in (x_min, y_min, x_max, y_max))
+aerial_url = (
+    'https://imagery.oregonexplorer.info/arcgis/rest/services/'
+    'OSIP_2024/OSIP_2024_WM/ImageServer/exportImage'
+)
+aerial_query = urllib.parse.urlencode({
+    'bbox': mercator_bbox,
+    'bboxSR': 3857,
+    'imageSR': 3857,
+    'size': f'{image_width},{image_height}',
+    'format': 'jpg',
+    'f': 'image',
+})
+print('Requesting OSIP offline aerial:', image_width, image_height, mercator_bbox)
+try:
+    aerial_request = urllib.request.Request(
+        aerial_url + '?' + aerial_query,
+        headers={'User-Agent': 'OregonLandExplorer/0.2 (offline sample)'},
+    )
+    with urllib.request.urlopen(aerial_request, timeout=120) as response:
+        aerial_bytes = response.read()
+        print('OSIP aerial response:', response.status, len(aerial_bytes), 'bytes')
+except urllib.error.HTTPError as exc:
+    raise RuntimeError(f'OSIP aerial export HTTP {exc.code}') from exc
+if len(aerial_bytes) < 10000 or not aerial_bytes.startswith(b'\xff\xd8\xff'):
+    raise RuntimeError('OSIP did not return a nonempty JPEG: ' +
+                       aerial_bytes[:200].decode('utf-8', errors='replace'))
+aerial_base64 = base64.b64encode(aerial_bytes).decode('ascii')
+south_west = inverse(x_min, y_min)
+north_east = inverse(x_max, y_max)
+# Leaflet's imageOverlay expects [latitude, longitude] corners.
+aerial_bounds = json.dumps([
+    [south_west[1], south_west[0]],
+    [north_east[1], north_east[0]],
+])
+(output / 'aerial.jpg').write_bytes(aerial_bytes)
+
+# Ensure the layer-control icon is also self-contained.
+for icon_name in ('layers.png', 'layers-2x.png'):
+    token = 'images/' + icon_name
+    if token in assets['leaflet.css']:
+        icon_url = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/' + token
+        with urllib.request.urlopen(icon_url, timeout=30) as response:
+            encoded = base64.b64encode(response.read()).decode('ascii')
+        for old in ('url(' + token + ')', 'url("' + token + '")',
+                    "url('" + token + "')"):
+            assets['leaflet.css'] = assets['leaflet.css'].replace(
+                old, 'url(data:image/png;base64,' + encoded + ')'
+            )
+
+html = r'''<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Oregon Land Explorer - Marion County Aerial Preview</title>
+  <!-- Leaflet 1.9.4 license:
+LEAFLET_LICENSE_PLACEHOLDER
+  -->
+  <style>LEAFLET_CSS_PLACEHOLDER</style>
+  <style>
+    html, body, #map { width: 100%; height: 100%; margin: 0; }
+    .leaflet-container { background: #e7eddf; }
+    .imagery-status { position: absolute; top: 80px; left: 10px; z-index: 1000;
+                      max-width: 300px; padding: 8px 10px; background: white;
+                      border-radius: 5px; font: 13px Arial, sans-serif; }
+    .imagery-status[data-state="error"] { border-left: 4px solid #b42318; }
+    .imagery-status button, .imagery-status a { margin-top: 6px; }
+    .notice { position: absolute; bottom: 20px; left: 10px; z-index: 1000;
+              max-width: 320px; background: white; padding: 8px 10px;
+              border-radius: 5px; font: 12px Arial, sans-serif;
+              box-shadow: 0 1px 5px #999; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div id="imagery-status" class="imagery-status" role="status" aria-live="polite" data-state="loading">
+    <span id="imagery-message">Loading map library…</span>
+    <button id="retry-imagery" type="button" hidden>Retry imagery</button>
+    <a id="failed-request" target="_blank" rel="noopener" hidden>Open failed tile request</a>
+  </div>
+  <div class="notice">2024 Oregon aerial imagery (OSIP). Parcel boundaries are approximate, not legal surveys. This map contains an offline copy of aerial imagery. Owner information reflects assessor records and may be outdated.</div>
+  <script>LEAFLET_JS_PLACEHOLDER</script>
+  <script>
+    if (window.L) {
+    const parcels = GEOJSON_PLACEHOLDER;
+    // Bundled OSIP 2024 raster: no live tile requests in the browser.
+    // The server export uses EPSG:3857, matching Leaflet's default CRS.
+    const map = L.map('map');
+    const aerial = L.imageOverlay(
+      'data:image/jpeg;base64,AERIAL_BASE64_PLACEHOLDER',
+      AERIAL_BOUNDS_PLACEHOLDER,
+      {attribution:'Oregon Statewide Imagery Program (OSIP), 2024'}
+    );
+
+    const imageryStatus = document.getElementById('imagery-status');
+    const imageryMessage = document.getElementById('imagery-message');
+    const retryImagery = document.getElementById('retry-imagery');
+    const failedRequest = document.getElementById('failed-request');
+    function reportImagery(message, state) {
+      imageryMessage.textContent = message;
+      imageryStatus.dataset.state = state;
+      retryImagery.hidden = true;
+      failedRequest.hidden = true;
+    }
+    aerial.on('load', () => reportImagery('Offline Oregon 2024 aerial image loaded.', 'ready'));
+    aerial.on('error', () => reportImagery('Embedded aerial image could not be decoded.', 'error'));
+
+    // Register handlers before adding the layer; parcel rendering is independent.
+    const layer = L.geoJSON(parcels, {
+      style: { color: '#ed8500', weight: 2, fillColor: '#edb262', fillOpacity: 0.24 },
+      onEachFeature: (feature, polygon) => {
+        const p = feature.properties || {};
+        const panel = document.createElement('div');
+        const heading = document.createElement('strong');
+        heading.textContent = 'Tax lot: ' + (p.TAXLOT ?? 'Unknown');
+        panel.appendChild(heading);
+        for (const [label, value] of [
+          ['Acres', p.ACRES],
+          ['Owner', p.OWNERNAME]
+        ]) {
+          const line = document.createElement('p');
+          line.textContent = label + ': ' + (value ?? 'Not available');
+          panel.appendChild(line);
+        }
+        polygon.bindPopup(panel);
+      }
+    }).addTo(map);
+    map.fitBounds(layer.getBounds(), { padding: [25, 25] });
+    aerial.addTo(map);
+    L.control.layers({ 'Oregon 2024 aerial': aerial }, { 'Parcel boundaries': layer }, { collapsed: false }).addTo(map);
+    }
+  </script>
+</body>
+</html>'''
+(output / 'map.html').write_text(
+    html.replace('GEOJSON_PLACEHOLDER', embedded_geojson)
+        .replace('AERIAL_BASE64_PLACEHOLDER', aerial_base64)
+        .replace('AERIAL_BOUNDS_PLACEHOLDER', aerial_bounds)
+        .replace('LEAFLET_CSS_PLACEHOLDER', assets['leaflet.css'])
+        .replace('LEAFLET_JS_PLACEHOLDER', assets['leaflet.js'])
+        .replace('LEAFLET_LICENSE_PLACEHOLDER', assets['LICENSE']),
+    encoding='utf-8',
+)
+populated = sum(bool((f.get('properties') or {}).get('OWNERNAME')) for f in features)
+print(f'Saved {len(features)} parcels; OWNERNAME populated for {populated}.')
+print('Saved output/parcels.geojson, output/aerial.jpg and offline output/map.html')

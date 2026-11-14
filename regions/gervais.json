@@ -1,0 +1,9 @@
+{
+  "id": "gervais",
+  "name": "Gervais test region",
+  "bbox": [-122.910, 45.100, -122.890, 45.115],
+  "minzoom": 13,
+  "maxzoom": 17,
+  "max_tiles": 300,
+  "max_parcels": 3000
+}

@@ -1,0 +1,46 @@
+{
+  "layers": {
+    "land": {
+      "minzoom": 8,
+      "maxzoom": 15
+    },
+    "water": {
+      "minzoom": 8,
+      "maxzoom": 15
+    },
+    "waterway": {
+      "minzoom": 8,
+      "maxzoom": 15
+    },
+    "roads": {
+      "minzoom": 8,
+      "maxzoom": 15
+    },
+    "rail": {
+      "minzoom": 8,
+      "maxzoom": 15
+    },
+    "building": {
+      "minzoom": 8,
+      "maxzoom": 15
+    },
+    "place": {
+      "minzoom": 8,
+      "maxzoom": 15
+    },
+    "poi": {
+      "minzoom": 8,
+      "maxzoom": 15
+    }
+  },
+  "settings": {
+    "minzoom": 8,
+    "maxzoom": 15,
+    "basezoom": 15,
+    "include_ids": true,
+    "name": "Oregon outdoor v1",
+    "version": "1",
+    "compress": "gzip",
+    "description": "Offline roads, trails, woodland, parks and water for the Gervais\u2013Silver Falls corridor"
+  }
+}
