@@ -119,6 +119,18 @@ class RegionImportTest {
                     assertTrue("No labels at $name",a.map!!.queryRenderedFeatures(rect,"road-labels","place-labels","park-labels").isNotEmpty())
                 }
                 device.executeShellCommand("screencap -p /sdcard/Download/ole-evidence/$name.png")
+                if(layer=="trails") {
+                    val latch=java.util.concurrent.CountDownLatch(1);var rustPixels=0
+                    scenario.onActivity { a -> a.map!!.snapshot { bitmap ->
+                        for(x in 0 until bitmap.width step 2) for(y in 0 until bitmap.height step 2) {
+                            val c=bitmap.getPixel(x,y)
+                            if(android.graphics.Color.red(c) in 145..185 && android.graphics.Color.green(c) in 60..110 && android.graphics.Color.blue(c) in 35..80) rustPixels++
+                        }
+                        latch.countDown()
+                    } }
+                    assertTrue(latch.await(20,java.util.concurrent.TimeUnit.SECONDS))
+                    assertTrue("Trails must be visibly painted at $name ($rustPixels rust pixels)",rustPixels>20)
+                }
             }
             for(i in 0 until 4) device.swipe(250,500,700,500,25)
             evidence("expanded-all-regions-memory.txt",device.executeShellCommand("dumpsys meminfo ${context.packageName}"))
