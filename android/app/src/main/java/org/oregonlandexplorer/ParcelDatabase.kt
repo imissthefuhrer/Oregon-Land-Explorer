@@ -75,7 +75,7 @@ object ParcelDatabase {
             var bytes=0;val rows=mutableListOf<Feature>()
             while(c.moveToNext()) {
                 val g=c.getString(2);bytes+=g.length
-                require(rows.size<1000 && bytes<=2*1024*1024) { "Legacy parcel view is dense; zoom in or install schema 3 package" }
+                require(rows.size<1000 && bytes<=2*1024*1024) { "Parcel view is dense; zoom in or import the updated parcel package" }
                 rows.add(feature(c.getString(0),c.getString(1),g))
             };rows
         }

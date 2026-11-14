@@ -64,9 +64,18 @@ class ParcelPerformanceTest {
             ActivityScenario.launch(MainActivity::class.java).use { s ->
                 ready(s);result.put("activity_ready_ms",SystemClock.elapsedRealtime()-started)
                 val rendered=CountDownLatch(1)
+                val completedFrames=JSONArray()
+                var frameStarted=0L;var fpsCount=0;var fpsSum=0.0;var fpsMin=Double.POSITIVE_INFINITY
                 val point=if(name=="silver") LatLng(44.877,-122.655) else LatLng(45.108,-122.897)
                 s.onActivity { a ->
-                    a.mapView.addOnDidFinishRenderingMapListener { fully -> if(fully) rendered.countDown() }
+                    a.mapView.addOnDidFinishRenderingMapListener { fully ->
+                        if(fully) {
+                            rendered.countDown()
+                            if(frameStarted>0) { completedFrames.put(SystemClock.elapsedRealtime()-frameStarted);frameStarted=0 }
+                        }
+                    }
+                    a.map!!.setOnFpsChangedListener { fps -> fpsCount++;fpsSum+=fps;fpsMin=minOf(fpsMin,fps) }
+                    frameStarted=SystemClock.elapsedRealtime()
                     a.map!!.moveCamera(CameraUpdateFactory.newLatLngZoom(point,15.0))
                 }
                 assertTrue("Map frame not completed",rendered.await(45,TimeUnit.SECONDS))
@@ -88,13 +97,14 @@ class ParcelPerformanceTest {
                 }
                 result.put("tap_to_popup_ms",selection)
                 val samples=JSONArray();val navigationStarted=SystemClock.elapsedRealtime()
+                device.executeShellCommand("dumpsys gfxinfo ${context.packageName} reset")
                 val count=if(name=="both") 600 else 12
                 for(i in 0 until count) {
                     // Repeatable regional switches, pans and zooms, including tile seams.
                     val anchor=if(i%4<2) point else LatLng(44.877,-122.655)
                     val position=LatLng(anchor.latitude+(i%3-1)*0.002,anchor.longitude+(i%5-2)*0.003)
                     val zoom=doubleArrayOf(13.0,15.0,17.0,18.0)[i%4]
-                    s.onActivity { it.map!!.moveCamera(CameraUpdateFactory.newLatLngZoom(position,zoom)) }
+                    s.onActivity { frameStarted=SystemClock.elapsedRealtime();it.map!!.moveCamera(CameraUpdateFactory.newLatLngZoom(position,zoom)) }
                     Thread.sleep(if(name=="both") 300 else 100)
                     if(i%12==11) { Thread.sleep(1500);samples.put(memory()) }
                 }
@@ -102,6 +112,11 @@ class ParcelPerformanceTest {
                 // Extended run includes repeated return to a fixed viewport for comparable end memory.
                 s.onActivity { it.map!!.moveCamera(CameraUpdateFactory.newLatLngZoom(point,15.0)) }
                 Thread.sleep(3000);result.put("after_navigation",memory())
+                s.onActivity { it.map!!.setOnFpsChangedListener(null) }
+                result.put("completed_viewport_frame_ms",completedFrames)
+                result.put("native_fps_samples",fpsCount)
+                if(fpsCount>0) result.put("native_fps_mean",fpsSum/fpsCount).put("native_fps_min",fpsMin)
+                save("$variant-$name-gfx.txt",device.executeShellCommand("dumpsys gfxinfo ${context.packageName} framestats"))
                 s.moveToState(androidx.lifecycle.Lifecycle.State.CREATED)
                 Thread.sleep(1000);s.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED);ready(s)
                 s.recreate();ready(s);Thread.sleep(2000);result.put("after_restore",memory())

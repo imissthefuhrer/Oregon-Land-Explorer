@@ -177,17 +177,18 @@ def validate_optimized(root, manifest):
             count += 1
     assert seen == keys, f'Missing maxzoom parcel identities: {sorted(keys-seen)}'
     # Reassemble maxzoom pieces independently, including holes and disjoint parts.
-    # Grid rounding may remove a long, narrower-than-grid spike. Comparing full
-    # boundaries with a Hausdorff threshold incorrectly rejects such subpixel
-    # topology changes. Check both eroded interiors instead: no area wider than
-    # one grid unit, including hole interiors, may be missing or invented.
+    # Grid rounding can remove narrow spikes AND fill narrow incisions. A plain
+    # Hausdorff test rejects the first; eroded interiors alone reject the second.
+    # Compare each eroded interior against the other's dilation instead. This
+    # explicitly tolerates subpixel topology but rejects missing/invented areas
+    # wider than two grid units, including separate parts and holes.
     tolerance = 2*HALF_WORLD/(2**HIGH*EXTENT)  # one grid unit in projected meters
     subpixel_changes = 0; max_subpixel_area = 0.0
     for key, geometry in exact.items():
         rendered = unary_union(pieces[key])
         assert rendered.is_valid and not rendered.is_empty, key
-        missing = geometry.buffer(-tolerance).difference(rendered).area
-        invented = rendered.buffer(-tolerance).difference(geometry).area
+        missing = geometry.buffer(-tolerance).difference(rendered.buffer(tolerance)).area
+        invented = rendered.buffer(-tolerance).difference(geometry.buffer(tolerance)).area
         assert missing < 1e-5 and invented < 1e-5, ('tile geometry outside render-grid budget',key,missing,invented)
         delta = geometry.symmetric_difference(rendered).area
         assert delta <= tolerance*(geometry.length+rendered.length), ('excessive render-grid area change',key,delta)

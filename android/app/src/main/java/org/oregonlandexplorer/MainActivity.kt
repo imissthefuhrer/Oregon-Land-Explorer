@@ -149,7 +149,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
             return true
         }
         if((map?.cameraPosition?.zoom ?: 0.0)<14.0) {
-            sheet("Zoom in to inspect properties","Overview boundaries are simplified. Zoom to level 14 or closer to select an approximate assessor boundary; this map is not a survey.")
+            sheet("Zoom in to inspect properties","Overview boundaries are simplified. Zoom closer to select an approximate assessor boundary; this map is not a survey.")
             return true
         }
         val generation=++parcelGeneration

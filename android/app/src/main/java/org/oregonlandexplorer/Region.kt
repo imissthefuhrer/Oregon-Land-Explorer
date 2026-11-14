@@ -37,9 +37,12 @@ class Region(private val context: Context) {
         val ordered=parcelPackages.sortedWith(compareByDescending<MapPackage> { java.time.Instant.parse(it.manifest.getString("extracted_at")) }.thenBy { it.id })
         val keys=ordered.filter { it.contains(latitude,longitude) }.flatMap { ParcelDatabase.candidates(it,latitude,longitude) }.toSet()
         require(keys.size<=256) { "Too many overlapping parcel candidates" }
+        var selectedBytes=0
         return keys.mapNotNull { key ->
             val pair=ordered.firstNotNullOfOrNull { pack -> ParcelDatabase.lookup(pack,key)?.let { pack to it } }
             pair?.takeIf { ParcelDatabase.contains(it.second,latitude,longitude) }?.let { (pack,feature) ->
+                selectedBytes+=feature.toJson().length
+                require(selectedBytes<=8*1024*1024) { "Selected overlapping parcels exceed the detail budget; inspect source data" }
                 feature.addStringProperty("source_extracted_at",pack.manifest.getString("extracted_at"))
                 feature.addStringProperty("source_package",pack.manifest.getString("name"))
                 feature
@@ -51,7 +54,7 @@ class Region(private val context: Context) {
         for(pack in legacyPackages.sortedBy { java.time.Instant.parse(it.manifest.getString("extracted_at")) }) {
             for(f in ParcelDatabase.viewport(pack,bounds)) {
                 bytes+=f.toJson().length
-                require(unique.size<1000 && bytes<=2*1024*1024) { "Legacy parcel view is dense; zoom in or install schema 3 package" }
+                require(unique.size<1000 && bytes<=2*1024*1024) { "Parcel view is dense; zoom in or import the updated parcel package" }
                 unique[f.getStringProperty("parcel_key")]=f
             }
         }
