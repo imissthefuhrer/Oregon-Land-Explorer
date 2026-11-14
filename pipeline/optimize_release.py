@@ -47,6 +47,7 @@ def main():
     storage={'source_packages_sha256':inputs,'packages_bytes':{p.name:p.stat().st_size for p in args.output.glob('*.olepack')},
              'expanded_payload_bytes':{p.name:sum(f.stat().st_size for f in p.iterdir()) for p in args.output.iterdir() if p.is_dir() and (p/'manifest.json').exists()}}
     (args.output/'storage.json').write_text(json.dumps(storage,indent=2))
+    print(json.dumps(storage,indent=2))
 
 
 if __name__=='__main__': main()

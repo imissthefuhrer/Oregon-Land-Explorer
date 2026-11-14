@@ -82,6 +82,7 @@ class ParcelPerformanceTest {
                 result.put("first_complete_frame_ms",SystemClock.elapsedRealtime()-started)
                 Thread.sleep(3000);result.put("settled",memory())
                 val selection=JSONArray()
+                val lookupToUi=JSONArray()
                 // Identical original source polygon point in each APK, irrespective of tile boundaries.
                 val pack=store.installed().first { it.id==if(name=="silver") "silver-falls" else "gervais-original-parcels" }
                 val p=pack.manifest.getJSONObject("selection_test")
@@ -93,9 +94,15 @@ class ParcelPerformanceTest {
                     s.onActivity { assertTrue(it.selectParcel(hit)) }
                     assertTrue("Parcel popup missing",device.wait(Until.hasObject(By.text("Property details")),10000))
                     selection.put(SystemClock.elapsedRealtime()-tap)
+                    s.onActivity { a ->
+                        // Optional metric from the new app; the benchmark still compiles
+                        // unchanged against PR #4 and measures both popup latencies.
+                        a.javaClass.methods.firstOrNull { it.name=="getLastSelectionMs" }?.let { lookupToUi.put(it.invoke(a)) }
+                    }
                     device.pressBack()
                 }
                 result.put("tap_to_popup_ms",selection)
+                if(lookupToUi.length()>0) result.put("lookup_to_ui_ms",lookupToUi)
                 val samples=JSONArray();val navigationStarted=SystemClock.elapsedRealtime()
                 device.executeShellCommand("dumpsys gfxinfo ${context.packageName} reset")
                 val count=if(name=="both") 600 else 12
@@ -122,6 +129,8 @@ class ParcelPerformanceTest {
                 s.recreate();ready(s);Thread.sleep(2000);result.put("after_restore",memory())
                 save("$variant-$name-memory.txt",device.executeShellCommand("dumpsys meminfo ${context.packageName}"))
                 result.put("installed_payload_bytes",store.installed().sumOf { pck -> pck.directory.walkTopDown().filter { it.isFile }.sumOf { it.length() } })
+                result.put("internal_data_bytes_all_versions_and_indexes",context.dataDir.walkTopDown().filter { it.isFile }.sumOf { it.length() })
+                result.put("installed_apk_bytes",java.io.File(context.applicationInfo.sourceDir).length())
             }
             scenarios.put(result);report.put("scenarios",scenarios)
             save("$variant-performance-$name.json",report.toString(2))

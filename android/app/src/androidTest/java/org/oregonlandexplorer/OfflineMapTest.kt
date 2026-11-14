@@ -93,6 +93,12 @@ class OfflineMapTest {
             Thread.sleep(3000)
             scenario.onActivity { activity ->
                 val test=activity.region!!.manifest.getJSONObject("selection_test")
+                val rect=android.graphics.RectF(0f,0f,activity.mapView.width.toFloat(),activity.mapView.height.toFloat())
+                val fills=activity.region!!.parcelLayerIds.filter { it.startsWith("parcel-fill") }.toTypedArray()
+                val lines=activity.region!!.parcelLayerIds.filter { it.startsWith("parcel-line") }.toTypedArray()
+                val visible=activity.map!!.queryRenderedFeatures(rect,*fills)
+                assertTrue("Exact popup must correspond to a natively rendered parcel polygon",visible.any { it.getStringProperty("parcel_key")==expected.getStringProperty("parcel_key") })
+                assertTrue("Native parcel boundary linework must render",activity.map!!.queryRenderedFeatures(rect,*lines).isNotEmpty())
                 val p=activity.map!!.projection.toScreenLocation(LatLng(test.getDouble("latitude"),test.getDouble("longitude")))
                 val offset=IntArray(2);activity.mapView.getLocationOnScreen(offset)
                 clickX=p.x.toInt()+offset[0]; clickY=p.y.toInt()+offset[1]
