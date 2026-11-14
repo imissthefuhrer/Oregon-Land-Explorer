@@ -23,7 +23,7 @@ import java.util.concurrent.TimeUnit
 
 @RunWith(AndroidJUnit4::class)
 class OfflineMapTest {
-    @Test fun coldStartRendersRealImageryAndSelectsParcelWithoutInternetPermission() {
+    @Test fun coldStartRendersVectorAndSelectsOriginalParcelWithoutInternetPermission() {
         val instrumentation=InstrumentationRegistry.getInstrumentation()
         val context=instrumentation.targetContext
         assertEquals(PackageManager.PERMISSION_DENIED, context.checkSelfPermission(Manifest.permission.INTERNET))
@@ -49,8 +49,9 @@ class OfflineMapTest {
             }
             assertTrue("Local style did not load",ready)
             onView(withText(containsString("Offline ·"))).check(matches(isDisplayed()))
-            // Native snapshot must contain actual photographic detail, not just orange polygons.
+            // Vector snapshot must contain styled land, roads and labels with parcels hidden.
             scenario.onActivity { activity ->
+                activity.map!!.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(45.108,-122.897),15.0))
                 for(name in listOf("parcel-fill","parcel-line")) activity.map!!.style!!.getLayer(name)!!.setProperties(visibility("none"))
             }
             Thread.sleep(7000)
@@ -63,8 +64,8 @@ class OfflineMapTest {
                 latch.countDown()
             } }
             assertTrue("Snapshot timed out",latch.await(20,TimeUnit.SECONDS))
-            assertTrue("Expected photographic detail, found only $colors colors", colors>200)
-            device.executeShellCommand("screencap -p /sdcard/Download/ole-evidence/offline-aerial.png")
+            assertTrue("Expected styled vector detail, found only $colors colors", colors>30)
+            device.executeShellCommand("screencap -p /sdcard/Download/ole-evidence/offline-vector-corridor.png")
             var expectedTaxlot=""
             var expectedOwner=""
             var clickX=0
@@ -96,7 +97,7 @@ class OfflineMapTest {
             onView(withText(containsString("Legal public access: Unknown"))).check(matches(isDisplayed()))
             device.executeShellCommand("screencap -p /sdcard/Download/ole-evidence/offline-parcel.png")
             device.pressBack()
-            scenario.onActivity { it.map!!.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(44.9,-123.2),15.0)) }
+            scenario.onActivity { it.map!!.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(44.7,-123.2),15.0)) }
             Thread.sleep(1500)
             onView(withText(containsString("Area not downloaded"))).check(matches(isDisplayed()))
             scenario.recreate()

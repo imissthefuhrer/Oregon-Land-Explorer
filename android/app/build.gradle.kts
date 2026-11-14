@@ -3,13 +3,23 @@ android {
     namespace = "org.oregonlandexplorer"
     compileSdk = 35
     defaultConfig {
-        applicationId = "org.oregonlandexplorer"
+        applicationId = "org.oregonlandexplorer.expanded"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1"
+        versionCode = 2
+        versionName = "0.2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
+    }
+    signingConfigs {
+        getByName("debug") {
+            System.getenv("OLE_KEYSTORE")?.let {
+                storeFile = file(it)
+                storePassword = System.getenv("OLE_STORE_PASSWORD")
+                keyAlias = "oregon-expanded"
+                keyPassword = System.getenv("OLE_STORE_PASSWORD")
+            }
+        }
     }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }

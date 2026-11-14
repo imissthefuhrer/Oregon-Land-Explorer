@@ -1,23 +1,18 @@
 name: Offline Android APK
 on:
   workflow_dispatch:
-    inputs:
-      region:
-        description: Configured region name
-        default: gervais
-        type: choice
-        options: [gervais]
   pull_request:
     paths: ['android/**', 'pipeline/**', 'regions/**', 'tests/**', 'scripts/check-apk.py', '.github/workflows/android-offline.yml']
 permissions:
   contents: read
+  actions: read
 concurrency:
   group: android-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   build-and-test:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 55
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -26,14 +21,21 @@ jobs:
       - run: python -m pip install -r pipeline/requirements.txt
       - name: GIS unit tests
         run: python -m pytest -q --junitxml=output/gis-tests.xml
-      - name: Prepare real Gervais offline package
-        run: python -m pipeline.build --region regions/gervais.json
-      - name: Independently validate package
-        run: python -m pipeline.validate output/region
-      - name: Stage audited package in APK assets
+      - name: Build pinned Tilemaker and install Osmium
         run: |
-          mkdir -p android/app/src/main/assets/region
-          cp output/region/* android/app/src/main/assets/region/
+          sudo apt-get update -qq
+          sudo apt-get install -y osmium-tool libboost-dev libboost-filesystem-dev libboost-program-options-dev libboost-system-dev lua5.3 liblua5.3-dev libshp-dev libsqlite3-dev rapidjson-dev
+          git clone --depth 1 --branch v3.2.0 https://github.com/systemed/tilemaker.git /tmp/tilemaker
+          make -C /tmp/tilemaker -j2 tilemaker
+          sudo install /tmp/tilemaker/tilemaker /usr/local/bin/tilemaker
+      - name: Retrieve verified PR 3 package without regenerating it
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download 43513075004 --name oregon-land-explorer-debug --dir work/baseline
+      - name: Build continuous vector and independent parcel packages
+        run: python -m pipeline.build_corridor --baseline work/baseline/gervais.olepack
+      - name: Audit all parcel fingerprints
+        run: python -m pipeline.validate_packages
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -45,30 +47,43 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.11.1'
-      - name: Build debug APK, instrumentation APK, and lint
+      - name: Restore stable expanded-app signing key
+        env:
+          OLE_SIGNING_KEY: ${{ secrets.OLE_SIGNING_KEY }}
+        run: |
+          test -n "$OLE_SIGNING_KEY"
+          echo "$OLE_SIGNING_KEY" | base64 --decode > "$RUNNER_TEMP/ole-signing.p12"
+      - name: Build signed APK, instrumentation APK, and lint
         working-directory: android
+        env:
+          OLE_KEYSTORE: ${{ runner.temp }}/ole-signing.p12
+          OLE_STORE_PASSWORD: ${{ secrets.OLE_STORE_PASSWORD }}
         run: gradle --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug :app:testDebugUnitTest
       - name: Verify actual APK contents and permissions
         run: python scripts/check-apk.py android/app/build/outputs/apk/debug/app-debug.apk
-      - name: Prepare simple download folder
+      - name: Prepare download folder
         run: |
           mkdir -p output/delivery
           cp android/app/build/outputs/apk/debug/app-debug.apk output/delivery/
-          cp output/gervais.olepack output/SHA256SUMS.txt output/apk-validation.json output/delivery/
-      - name: Upload installable APK and region
+          cp output/*.olepack output/storage.json output/vector-validation.json output/packages-validation.json output/apk-validation.json output/delivery/
+          cd output/delivery && sha256sum *.apk *.olepack > SHA256SUMS.txt
+      - name: Upload APK and map packages
         uses: actions/upload-artifact@v4
         with:
-          name: oregon-land-explorer-debug
+          name: oregon-land-explorer-expanded
           path: output/delivery/
-          retention-days: 14
+          retention-days: 30
           if-no-files-found: error
       - name: Enable emulator acceleration
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Test cold launch, offline imagery, parcel tap and restart
+      - name: Test offline vector, import, parcel selection, GPS and restart
         uses: reactivecircus/android-emulator-runner@v2
+        env:
+          OLE_KEYSTORE: ${{ runner.temp }}/ole-signing.p12
+          OLE_STORE_PASSWORD: ${{ secrets.OLE_STORE_PASSWORD }}
         with:
           api-level: 35
           arch: x86_64
@@ -80,17 +95,27 @@ jobs:
             adb shell svc wifi disable
             adb shell svc data disable
             adb shell settings put global airplane_mode_on 1
+            adb push output/gervais-countryside.olepack /sdcard/Download/gervais-countryside.olepack
+            adb push output/silver-falls.olepack /sdcard/Download/silver-falls.olepack
             cd android && gradle --no-daemon :app:connectedDebugAndroidTest
-            mkdir -p "$GITHUB_WORKSPACE/output/emulator-screenshots"
-            adb pull /sdcard/Download/ole-evidence/. "$GITHUB_WORKSPACE/output/emulator-screenshots/"
-      - name: Upload test evidence (also on failure)
+      - name: Collect emulator evidence
+        if: always()
+        run: |
+          mkdir -p output/emulator-screenshots
+          adb pull /sdcard/Download/ole-evidence/. output/emulator-screenshots/ || true
+          adb shell dumpsys meminfo org.oregonlandexplorer.expanded > output/memory.txt || true
+      - name: Upload test evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: offline-test-evidence
           path: |
             output/gis-tests.xml
+            output/vector-validation.json
+            output/packages-validation.json
+            output/storage.json
+            output/memory.txt
             output/emulator-screenshots/
             android/app/build/reports/
             android/app/build/outputs/androidTest-results/
-          retention-days: 14
+          retention-days: 30

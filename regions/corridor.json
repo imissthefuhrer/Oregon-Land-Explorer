@@ -1,0 +1,18 @@
+{
+  "id": "willamette-silver-outdoors",
+  "name": "Gervais • Willamette • Silver Falls",
+  "bbox": [-123.10, 44.80, -122.48, 45.25],
+  "minzoom": 8,
+  "maxzoom": 15,
+  "revision": 1,
+  "parcel_regions": [
+    {"id": "gervais-countryside", "name": "Gervais, St. Louis Ponds & Willamette Mission parcels", "bbox": [-123.06, 45.015, -122.80, 45.22], "max_parcels": 20000},
+    {"id": "silver-falls", "name": "Silver Falls & approaches parcels", "bbox": [-122.76, 44.80, -122.48, 45.02], "max_parcels": 15000}
+  ],
+  "targets": [
+    {"name": "Gervais countryside", "bbox": [-123.02,45.06,-122.84,45.20]},
+    {"name": "St. Louis Ponds", "bbox": [-122.96,45.115,-122.935,45.145]},
+    {"name": "Willamette Mission State Park", "bbox": [-123.065,45.065,-123.025,45.105]},
+    {"name": "Silver Falls State Park", "bbox": [-122.70,44.81,-122.54,44.99]}
+  ]
+}

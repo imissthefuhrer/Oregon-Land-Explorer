@@ -1,56 +1,47 @@
 package org.oregonlandexplorer
 
 import android.content.Context
+import org.json.JSONArray
 import org.json.JSONObject
+import org.maplibre.geojson.Feature
 import org.maplibre.geojson.FeatureCollection
-import java.io.File
-import java.security.MessageDigest
 
-/** Versioned, independently replaceable data. No network or MapLibre offline-cache dependency. */
-class Region(context: Context) {
-    val directory = File(context.filesDir, "bundled-region-v1")
+/** Continuous base coverage and independent parcel coverage are intentionally different. */
+class Region(private val context: Context) {
+    val store=PackageStore(context)
+    val packages: List<MapPackage>
     val manifest: JSONObject
     val parcels: FeatureCollection
+    private val base: MapPackage
+    private val parcelPackages: List<MapPackage>
     init {
-        directory.mkdirs()
-        // Replace changed bundled assets after an APK update, checking every digest before use.
-        val raw = context.assets.open("region/manifest.json").bufferedReader().use { it.readText() }
-        manifest = JSONObject(raw)
-        require(manifest.getInt("schema_version") == 1)
-        val hashes = manifest.getJSONObject("sha256")
-        for (name in hashes.keys()) {
-            require(File(name).name == name)
-            val destination = File(directory, name)
-            val expected = hashes.getString(name)
-            if (!destination.exists() || sha(destination) != expected) {
-                val temporary = File(directory, "$name.tmp")
-                context.assets.open("region/$name").use { input -> temporary.outputStream().use { input.copyTo(it) } }
-                require(sha(temporary) == expected) { "Damaged map package: $name" }
-                check(temporary.renameTo(destination)) { "Cannot install map package" }
+        store.installBundled()
+        packages=store.installed()
+        val active=packages.filter { it.enabled }
+        base=active.firstOrNull { it.kind=="vector" } ?: error("Enable an installed vector basemap")
+        parcelPackages=active.filter { it.kind in listOf("parcels","legacy") }
+        val unique=LinkedHashMap<Long,Feature>()
+        for(pack in parcelPackages.sortedBy { it.manifest.optString("extracted_at") }) {
+            for(feature in pack.parcels().features() ?: emptyList()) unique[feature.getNumberProperty("OBJECTID").toLong()]=feature
+        }
+        parcels=FeatureCollection.fromFeatures(unique.values.toList())
+        manifest=JSONObject(base.manifest.toString()).put("parcel_count",unique.size)
+        parcelPackages.firstOrNull()?.manifest?.optJSONObject("selection_test")?.let { manifest.put("selection_test",it) }
+    }
+    fun contains(latitude: Double,longitude: Double)=base.contains(latitude,longitude)
+    fun containsParcel(latitude: Double,longitude: Double)=parcelPackages.any { it.contains(latitude,longitude) }
+    fun containsAerial(latitude: Double,longitude: Double)=packages.any { it.enabled && it.kind in listOf("aerial","legacy") && it.contains(latitude,longitude) }
+    fun style(aerial: Boolean=false): String {
+        val style=JSONObject(context.assets.open("outdoor-style.json").bufferedReader().use { it.readText() })
+        style.getJSONObject("sources").getJSONObject("outdoors").put("url",base.url("basemap.pmtiles"))
+        if(aerial) {
+            val layers=style.getJSONArray("layers")
+            for(pack in packages.filter { it.enabled && it.kind in listOf("aerial","legacy") }) {
+                val source="aerial-${pack.id}"
+                style.getJSONObject("sources").put(source,JSONObject().put("type","raster").put("tileSize",256).put("url",pack.url("aerial.pmtiles")))
+                layers.put(JSONObject().put("id",source).put("type","raster").put("source",source).put("paint",JSONObject().put("raster-fade-duration",0)))
             }
         }
-        parcels = FeatureCollection.fromJson(File(directory, "parcels.geojson").readText())
-        require(parcels.features()?.size == manifest.getInt("parcel_count"))
-    }
-    fun contains(latitude: Double, longitude: Double): Boolean {
-        val b = manifest.getJSONArray("bbox")
-        return longitude in b.getDouble(0)..b.getDouble(2) && latitude in b.getDouble(1)..b.getDouble(3)
-    }
-    fun style(): String = JSONObject().apply {
-        put("version", 8)
-        put("sources", JSONObject().put("aerial", JSONObject()
-            .put("type", "raster").put("tileSize", 256)
-            .put("url", "pmtiles://file://${File(directory, "aerial.pmtiles").absolutePath}")))
-        put("layers", org.json.JSONArray().put(JSONObject().put("id", "background").put("type", "background")
-            .put("paint", JSONObject().put("background-color", "#26382e")))
-            .put(JSONObject().put("id", "aerial").put("type", "raster").put("source", "aerial")))
-    }.toString()
-    private fun sha(file: File): String {
-        val digest = MessageDigest.getInstance("SHA-256")
-        file.inputStream().use { input ->
-            val buffer = ByteArray(65536)
-            while (true) { val n = input.read(buffer); if (n < 0) break; digest.update(buffer, 0, n) }
-        }
-        return digest.digest().joinToString("") { "%02x".format(it) }
+        return style.toString()
     }
 }

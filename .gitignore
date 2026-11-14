@@ -12,3 +12,8 @@ android/.gradle/
 android/**/build/
 android/app/src/main/assets/region/
 local.properties
+android/app/src/main/assets/packs/
+android/app/src/main/assets/glyphs/
+android/app/src/androidTest/assets/
+*.p12
+*.jks
