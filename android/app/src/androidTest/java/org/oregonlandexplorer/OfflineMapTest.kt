@@ -26,6 +26,12 @@ class OfflineMapTest {
     @Test fun coldStartRendersVectorAndSelectsOriginalParcelWithoutInternetPermission() {
         val instrumentation=InstrumentationRegistry.getInstrumentation()
         val context=instrumentation.targetContext
+        instrumentation.runOnMainSync {
+            org.maplibre.android.MapLibre.getInstance(context)
+            org.maplibre.android.storage.FileSource.getInstance(context).setResourceTransform { kind,url ->
+                android.util.Log.i("OLE_RESOURCE","$kind $url");url
+            }
+        }
         assertEquals(PackageManager.PERMISSION_DENIED, context.checkSelfPermission(Manifest.permission.INTERNET))
         val device=UiDevice.getInstance(instrumentation)
         device.executeShellCommand("mkdir -p /sdcard/Download/ole-evidence")
@@ -57,15 +63,49 @@ class OfflineMapTest {
             Thread.sleep(7000)
             val latch=CountDownLatch(1)
             var colors=0
+            var darkLabelPixels=0
             scenario.onActivity { activity -> activity.map!!.snapshot { bitmap ->
                 val unique=HashSet<Int>()
                 for(x in bitmap.width/4 until bitmap.width*3/4 step 3) for(y in bitmap.height/4 until bitmap.height*3/4 step 3) unique.add(bitmap.getPixel(x,y))
                 colors=unique.size
+                for(x in 0 until bitmap.width step 2) for(y in 0 until bitmap.height step 2) {
+                    val c=bitmap.getPixel(x,y)
+                    if(android.graphics.Color.red(c)<125 && android.graphics.Color.green(c)<125 && android.graphics.Color.blue(c)<125) darkLabelPixels++
+                }
                 latch.countDown()
             } }
             assertTrue("Snapshot timed out",latch.await(20,TimeUnit.SECONDS))
-            assertTrue("Expected styled vector detail, found only $colors colors", colors>30)
             device.executeShellCommand("screencap -p /sdcard/Download/ole-evidence/offline-vector-corridor.png")
+            scenario.onActivity { a ->
+                val rect=android.graphics.RectF(0f,0f,a.mapView.width.toFloat(),a.mapView.height.toFloat())
+                val features=a.map!!.queryRenderedFeatures(rect,"roads")
+                android.util.Log.i("OLE_DIAGNOSTIC","glyphs="+org.json.JSONObject(a.map!!.style!!.json).optString("glyphs"))
+                android.util.Log.i("OLE_DIAGNOSTIC","roads="+features.take(4).joinToString { it.properties().toString() })
+            }
+            assertTrue("Expected styled vector detail, found only $colors colors", colors>30)
+            if(darkLabelPixels<=100) {
+                // Failure-only probes distinguish expression evaluation, asset loading and glyph rendering.
+                scenario.onActivity { a -> for(name in listOf("road-labels","park-labels","place-labels")) a.map!!.style!!.getLayer(name)!!.setProperties(org.maplibre.android.style.layers.PropertyFactory.textField("{name}")) }
+                Thread.sleep(3500)
+                device.executeShellCommand("screencap -p /sdcard/Download/ole-evidence/token-label-probe.png")
+                val directory=java.io.File(context.cacheDir,"glyph-probe/Noto Sans Regular").apply { mkdirs() }
+                for(name in context.assets.list("glyphs/Noto Sans Regular")!!) context.assets.open("glyphs/Noto Sans Regular/$name").use { input -> java.io.File(directory,name).outputStream().use { input.copyTo(it) } }
+                scenario.onActivity { a ->
+                    val json=org.json.JSONObject(a.region!!.style())
+                    json.put("glyphs","file://${directory.parentFile!!.absolutePath}/{fontstack}/{range}.pbf")
+                    for(i in 0 until json.getJSONArray("layers").length()) {
+                        val layer=json.getJSONArray("layers").getJSONObject(i)
+                        if(layer.getString("type")=="symbol") layer.getJSONObject("layout").put("text-field","{name}")
+                    }
+                    a.map!!.setStyle(org.maplibre.android.maps.Style.Builder().fromJson(json.toString())) { style ->
+                        style.addSource(org.maplibre.android.style.sources.GeoJsonSource("font-probe",org.maplibre.geojson.Feature.fromGeometry(org.maplibre.geojson.Point.fromLngLat(-122.897,45.108))))
+                        style.addLayer(org.maplibre.android.style.layers.SymbolLayer("font-probe","font-probe").withProperties(org.maplibre.android.style.layers.PropertyFactory.textField("Font diagnostic"),org.maplibre.android.style.layers.PropertyFactory.textFont(arrayOf("Noto Sans Regular")),org.maplibre.android.style.layers.PropertyFactory.textSize(24f),org.maplibre.android.style.layers.PropertyFactory.textColor("#000000"),org.maplibre.android.style.layers.PropertyFactory.textAllowOverlap(true)))
+                    }
+                }
+                Thread.sleep(5000)
+                device.executeShellCommand("screencap -p /sdcard/Download/ole-evidence/file-glyph-probe.png")
+            }
+            assertTrue("Map labels must be visibly rendered ($darkLabelPixels dark pixels)",darkLabelPixels>100)
             var expectedTaxlot=""
             var expectedOwner=""
             var clickX=0

@@ -68,7 +68,20 @@ jobs:
         with:
           path: work/vector/oregon.osm.pbf
           key: geofabrik-oregon-${{ steps.snapshot.outputs.day }}
+      - uses: actions/cache/restore@v4
+        id: prepared-cache
+        with:
+          key: prepared-regions-v1-${{ steps.snapshot.outputs.day }}-${{ hashFiles('pipeline/**', 'regions/**') }}
+          path: |
+            output/*/
+            output/*.olepack
+            output/storage.json
+            output/vector-validation.json
+            android/app/src/main/assets/packs/
+            android/app/src/main/assets/glyphs/
+            android/app/src/androidTest/assets/
       - name: Build continuous vector and independent parcel packages
+        if: steps.prepared-cache.outputs.cache-hit != 'true'
         run: python -m pipeline.build_corridor --baseline work/baseline/gervais.olepack
       - uses: actions/cache/save@v4
         if: ${{ !cancelled() && steps.osm-cache.outputs.cache-hit != 'true' && hashFiles('work/vector/source-verified.txt') != '' }}
@@ -77,6 +90,18 @@ jobs:
           key: geofabrik-oregon-${{ steps.snapshot.outputs.day }}
       - name: Audit all parcel fingerprints
         run: python -m pipeline.validate_packages
+      - uses: actions/cache/save@v4
+        if: steps.prepared-cache.outputs.cache-hit != 'true'
+        with:
+          key: prepared-regions-v1-${{ steps.snapshot.outputs.day }}-${{ hashFiles('pipeline/**', 'regions/**') }}
+          path: |
+            output/*/
+            output/*.olepack
+            output/storage.json
+            output/vector-validation.json
+            android/app/src/main/assets/packs/
+            android/app/src/main/assets/glyphs/
+            android/app/src/androidTest/assets/
       - name: Restore stable expanded-app signing key
         env:
           OLE_SIGNING_KEY: ${{ secrets.OLE_SIGNING_KEY }}
