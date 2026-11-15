@@ -28,6 +28,22 @@ Hosted full inventory comparison: https://github.com/imissthefuhrer/Oregon-Land-
 
 The county and Open Data View inventories match after a TAXLOT/TAXACCT join, including OBJECTIDs and acreage in this observation. That is an observed comparison, not an assumption that services share an ID namespace. Representative mirror geometries differ by approximately 0.000015 degrees from the current source; differences can include projection/vintage effects and do not establish physical boundary movement. County/Open Data View representative differences were zero or near numerical precision.
 
+Extended extent/date audit: https://github.com/imissthefuhrer/Oregon-Land-Explorer/actions/runs/43701539925 .
+The current county/Open Data View query extent in WGS84 is
+`[-123.17979456, 44.68383668, -121.73311984, 45.28448735]`.
+The mirror's transformed extent envelope is
+`[-123.20036475, 44.65980101, -121.72880236, 45.30429850]`.
+Its published extent uses EPSG:2913; the county service uses EPSG:3857.
+Transformed envelopes are conservative summaries and do not prove actual polygon
+coverage. Completeness uses the official polygon and exact source ID reconciliation.
+
+Original `LASTUPDATE` values have no nulls in the observed inventories. Mirror
+record dates range from 2025-02-16 to 2025-08-13; current county/Open Data View
+record dates range from 2025-02-16 to 2026-08-28. The mirror service edit stamp is
+2025-09-15, and the Open Data View edit stamp is 2026-11-09. The county MapServer
+does not publish an equivalent layer edit stamp. These are distinct observations,
+not proof of a current tax roll or owner-data vintage.
+
 Countywide owner production is blocked pending written permission. The user confirmed no permission on 2026-11-15. The official catalog says ownership information is removed and requires a written request: https://www.arcgis.com/home/item.html?id=9e496e9558ae476e9b65e1cf51b2594a . No owner values or addresses were requested for the county public packages or source inventory comparisons.
 
 ## Storage

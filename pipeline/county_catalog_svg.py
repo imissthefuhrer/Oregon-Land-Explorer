@@ -31,9 +31,10 @@ def build(root):
         x,y=project(lon,lat)
         body.append(f'<circle cx="{x:.2f}" cy="{y:.2f}" r="3" fill="#173b2c"/><text x="{x+5:.2f}" y="{y-5:.2f}" font-family="sans-serif" font-size="13" fill="#173b2c" stroke="white" stroke-width="3" paint-order="stroke">{name}</text>')
     body.extend(['<g font-family="sans-serif" fill="#173b2c" font-size="15">',
-        '<text x="24" y="610">Basemap: the complete outlined county plus a surrounding buffer. Public parcels: 115,870 records in 16 packages.</text>',
+        f'<text x="24" y="610">Basemap: the complete outlined county plus a surrounding buffer. Public parcels: {sum(p["parcel_count"] for p in catalog["packages"]):,} records in {len(catalog["packages"])} packages.</text>',
         '<text x="24" y="637">Colors show processing assignments, not property boundaries. Complete crossing parcels remain intact in their package.</text>',
         '<text x="24" y="664">Owner names withheld by the county public download. Missing assessor geometry does not establish ownership or access.</text>',
+        '<text x="24" y="690" font-size="11">Sources: Marion County IT-GIS official boundary and Open Data View. Approximate processing coverage, not a survey.</text>',
         '</g></svg>'])
     (root/'county-coverage.svg').write_text('\n'.join(body))
 
