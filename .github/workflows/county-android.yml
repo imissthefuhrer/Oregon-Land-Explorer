@@ -15,6 +15,10 @@ on:
         description: Non-owner inventory comparison run for release evidence
         default: '43694060470'
         required: false
+      diagnostic_only:
+        description: Render-only investigation; never publish an APK from this run
+        type: boolean
+        default: false
 permissions:
   contents: read
   actions: read
@@ -76,6 +80,8 @@ jobs:
           sudo udevadm trigger --name-match=kvm
       - name: In-place v0.3.2 upgrade, full county stress and airplane-mode tests
         uses: reactivecircus/android-emulator-runner@v2
+        env:
+          OLE_DIAGNOSTIC_ONLY: ${{ inputs.diagnostic_only }}
         with:
           api-level: 35
           arch: x86_64
@@ -85,12 +91,14 @@ jobs:
           emulator-options: -no-window -gpu host -feature -Vulkan -noaudio -no-boot-anim -camera-back none
           script: bash scripts/test-county-device.sh
       - name: Prepare phone APK download after successful device checks
+        if: ${{ !inputs.diagnostic_only }}
         run: |
           mkdir -p output/county-app
           cp android/app/build/outputs/apk/debug/app-debug.apk output/county-app/oregon-land-explorer-v0.4.0.apk
           cp output/apk-validation.json work/county-delivery/INSTALL.txt output/county-app/
           cd output/county-app && sha256sum *.apk > SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
+        if: ${{ !inputs.diagnostic_only }}
         with: {name: oregon-land-explorer-county-apk, path: output/county-app/, retention-days: 30}
       - uses: actions/upload-artifact@v4
         with:

@@ -2,7 +2,7 @@
 set -euo pipefail
 mkdir -p output/emulator-screenshots
 adb shell mkdir -p /sdcard/Download/ole-evidence
-trap 'adb logcat -d -b crash > output/county-emulator-crashes.txt || true; adb pull /sdcard/Download/ole-evidence/. output/emulator-screenshots/ || true' EXIT
+trap 'adb logcat -d > output/county-logcat.txt || true; adb logcat -d -b crash > output/county-emulator-crashes.txt || true; adb pull /sdcard/Download/ole-evidence/. output/emulator-screenshots/ || true' EXIT
 adb shell cmd connectivity airplane-mode enable
 adb shell svc wifi disable
 adb shell svc data disable
@@ -14,6 +14,12 @@ instrument() {
   grep -q 'OK (' "$result_file"
   ! grep -q 'FAILURES\|INSTRUMENTATION_FAILED\|Process crashed' "$result_file"
 }
+if [ "${OLE_DIAGNOSTIC_ONLY:-false}" = true ]; then
+  adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+  adb install -r "$test_app"
+  instrument org.oregonlandexplorer.CountyRenderDiagnosticTest output/county-render-diagnostic.txt
+  exit 0
+fi
 # Run the unchanged v0.3.2 app on the same device with the same original-region benchmark.
 adb install -r work/v032/app-debug.apk
 adb install -r "$test_app"
