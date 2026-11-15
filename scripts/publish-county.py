@@ -33,6 +33,7 @@ for source in Path('work/release-coverage').glob('*.json'):shutil.copyfile(sourc
 for source in Path('work/release-app').glob('*.apk'):shutil.copyfile(source,root/source.name)
 for source in Path('work/release-audit').glob('*.json'):shutil.copyfile(source,root/source.name)
 subprocess.run(['python','-m','pipeline.county_phone_validation','--source',str(root)],check=True)
+subprocess.run(['python','-m','pipeline.county_catalog_svg',str(root)],check=True)
 summaries=list(Path('work/release-evidence').rglob('county-performance-summary.json'));assert len(summaries)==1
 performance=json.loads(summaries[0].read_text());assert performance['result']=='PASS'
 shutil.copyfile(summaries[0],root/'county-performance-summary.json')
@@ -63,6 +64,7 @@ The unchanged v0.3.2 fallback APK is preserved separately; Android blocks ordina
 with zipfile.ZipFile(root/'marion-county-all-maps.zip','w',zipfile.ZIP_STORED) as bundle:
     for file in sorted(root.glob('*.olepack')):bundle.write(file,'Maps/'+file.name)
     for file in sorted(root.glob('*.json')):bundle.write(file,'Reports/'+file.name)
+    bundle.write(root/'county-coverage.svg','Reports/county-coverage.svg')
     bundle.writestr('INSTALL.txt',instructions)
     bundle.writestr('SHA256SUMS.txt',''.join(f'{sha(p)}  Maps/{p.name}\n' for p in sorted(root.glob('*.olepack'))))
 (root/'SHA256SUMS.txt').write_text(''.join(f'{sha(p)}  {p.name}\n' for p in sorted(root.iterdir()) if p.is_file() and p.name!='SHA256SUMS.txt'))
