@@ -34,6 +34,7 @@ jobs:
           cd work/county-delivery && sha256sum -c SHA256SUMS.txt
       - name: Stage exact tested core assets and external county instrumentation fixtures
         run: |
+          python -m pipeline.county_phone_validation
           python scripts/stage-county-android.py
           python -m pipeline.tile_fixtures
       - uses: actions/setup-java@v4
@@ -84,6 +85,13 @@ jobs:
           cd output/county-app && sha256sum *.apk > SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with: {name: oregon-land-explorer-county-apk, path: output/county-app/, retention-days: 30}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: county-final-coverage-catalog
+          path: |
+            work/county-delivery/county-catalog.json
+            work/county-delivery/county-final-reconciliation.json
+          retention-days: 30
       - uses: actions/upload-artifact@v4
         if: always()
         with:

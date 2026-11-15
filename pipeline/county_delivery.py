@@ -19,16 +19,17 @@ def verify_attributes(z,manifest):
         with z.open('parcels.sqlite') as input, dbpath.open('wb') as output:shutil.copyfileobj(input,output)
         with sqlite3.connect(f'file:{dbpath}?mode=ro',uri=True) as db:
             assert db.execute('PRAGMA integrity_check').fetchone()[0]=='ok'
-            for oid,owner,raw in db.execute('SELECT id,owner,properties FROM parcels'):
+            for oid,owner,raw,taxlot,acres in db.execute('SELECT id,owner,properties,taxlot,acres FROM parcels'):
                 p=json.loads(raw)
                 assert owner is None and 'OWNERNAME' not in p
+                assert oid==p['OBJECTID'] and taxlot==p.get('TAXLOT') and acres==p.get('ACRES')
                 assert not set(p)-{'OBJECTID','TAXLOT','TAXACCT','ACRES','LASTUPDATE','owner_data_status','geometry_repair_note'}
                 attrs={k:p.get(k) for k in ['OBJECTID','TAXLOT','TAXACCT','ACRES','LASTUPDATE']}
                 actual=hashlib.sha256(json.dumps(attrs,sort_keys=True,separators=(',', ':')).encode()).hexdigest()
                 assert actual==source[str(oid)], ('source attribute mismatch',manifest['id'],oid)
                 count+=1
     assert count==manifest['parcel_count']==len(source)
-    return count
+    return source
 
 
 def main():

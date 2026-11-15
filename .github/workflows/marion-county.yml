@@ -5,6 +5,9 @@ on:
       reuse_parcels_run:
         description: Optional prior run with successful extraction and all six parcel shards (basemap-only retry/update)
         required: false
+      reuse_basemap_run:
+        description: Optional prior run with successful county basemap validation (delivery-only recovery)
+        required: false
       osm_source:
         description: Explicit public bulk provider (no tile servers)
         type: choice
@@ -77,6 +80,7 @@ jobs:
             output/county/*/parcel-validation.json
           retention-days: 30
   basemap:
+    if: ${{ !inputs.reuse_basemap_run }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -103,10 +107,13 @@ jobs:
           retention-days: 30
   delivery:
     needs: [extract, packages, basemap]
-    if: ${{ always() && needs.basemap.result == 'success' && (needs.packages.result == 'success' || inputs.reuse_parcels_run != '') }}
+    if: ${{ always() && (needs.basemap.result == 'success' || inputs.reuse_basemap_run != '') && (needs.packages.result == 'success' || inputs.reuse_parcels_run != '') }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: python -m pip install -r pipeline/requirements.txt
       - uses: actions/download-artifact@v4
         with:
           pattern: marion-parcels-*
@@ -115,7 +122,11 @@ jobs:
           run-id: ${{ inputs.reuse_parcels_run || github.run_id }}
           github-token: ${{ github.token }}
       - uses: actions/download-artifact@v4
-        with: {name: marion-county-basemap, path: output/delivery}
+        with:
+          name: marion-county-basemap
+          path: output/delivery
+          run-id: ${{ inputs.reuse_basemap_run || github.run_id }}
+          github-token: ${{ github.token }}
       - uses: actions/download-artifact@v4
         with:
           name: county-open-data-checkpoints
@@ -123,6 +134,8 @@ jobs:
           run-id: ${{ inputs.reuse_parcels_run || github.run_id }}
           github-token: ${{ github.token }}
       - name: Reconcile delivery files and produce catalog and checksums
-        run: python -m pipeline.county_delivery
+        run: |
+          python -m pipeline.county_delivery
+          python -m pipeline.county_phone_validation --source output/delivery
       - uses: actions/upload-artifact@v4
         with: {name: marion-county-offline-maps, path: output/delivery/, retention-days: 30}

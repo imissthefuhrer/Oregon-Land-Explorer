@@ -74,7 +74,7 @@ class CountyPerformanceTest {
         report.put("county_package_count",countyPacks.size).put("county_parcel_count",countyPacks.sumOf { it.manifest.getInt("parcel_count") })
         report.put("installed_payload_bytes",store.installed().sumOf { it.payloadBytes })
         val samples=JSONArray();report.put("scenarios",samples)
-        save("county-performance.json",report.toString(2))
+        save("county-import-performance.json",report.toString(2))
         val anchors=listOf("Salem" to LatLng(44.942,-123.035),"Gervais" to LatLng(45.108,-122.897),
             "Silverton" to LatLng(45.005,-122.783),"Silver Falls" to LatLng(44.878,-122.657),
             "Gates" to LatLng(44.755,-122.416),"Detroit" to LatLng(44.735,-122.151),"Eastern forest" to LatLng(44.85,-121.93))
@@ -96,8 +96,9 @@ class CountyPerformanceTest {
                         a.map!!.moveCamera(CameraUpdateFactory.newLatLngZoom(point,16.0))
                     }
                     assertTrue("No complete tile frame $name",frame.await(45,TimeUnit.SECONDS))
+                    val completeMs=SystemClock.elapsedRealtime()-moved
                     Thread.sleep(1000)
-                    viewReports.put(JSONObject().put("place",name).put("complete_frame_ms",SystemClock.elapsedRealtime()-moved).put("memory",memory()))
+                    viewReports.put(JSONObject().put("place",name).put("complete_frame_ms",completeMs).put("memory",memory()))
                     if(mode=="all-regions") device.executeShellCommand("screencap -p /sdcard/Download/ole-evidence/county-${name.replace(' ','-')}.png")
                 }
                 // Each partition supplies a real exact interior point and identity.
@@ -118,6 +119,17 @@ class CountyPerformanceTest {
                     assertTrue("Exact selection failed for ${pack.id}",found)
                     selections.put(JSONObject().put("package",pack.id).put("exact_lookup_ms",SystemClock.elapsedRealtime()-t))
                 }
+                if(mode!="one-region") {
+                    val targets=catalog.getJSONArray("selection_targets")
+                    for(i in 0 until targets.length()) {
+                        val target=targets.getJSONObject(i);val t=SystemClock.elapsedRealtime()
+                        scenario.onActivity { a ->
+                            val hits=a.region!!.select(target.getDouble("latitude"),target.getDouble("longitude"))
+                            assertTrue("Actual parcel missing near ${target.getString("name")}",hits.any { it.getStringProperty("parcel_key")==target.getString("parcel_key") && it.getStringProperty("TAXLOT")==target.getString("taxlot") })
+                        }
+                        selections.put(JSONObject().put("target",target.getString("name")).put("package",target.getString("package")).put("exact_lookup_ms",SystemClock.elapsedRealtime()-t))
+                    }
+                }
                 val navigation=JSONArray();sample.put("navigation_memory",navigation)
                 val count=if(mode=="overlapping-regions") 600 else 24
                 val panStarted=SystemClock.elapsedRealtime()
@@ -132,7 +144,7 @@ class CountyPerformanceTest {
                 Thread.sleep(2000);sample.put("after_navigation",memory())
                 scenario.moveToState(Lifecycle.State.CREATED);Thread.sleep(1000);scenario.moveToState(Lifecycle.State.RESUMED);ready(scenario)
                 scenario.recreate();ready(scenario);Thread.sleep(1000);sample.put("after_recreation",memory())
-                save("county-performance.json",report.toString(2))
+                save("county-$mode-performance.json",report.toString(2))
                 if(mode=="all-regions") {
                     val p=countyPacks.first().manifest.getJSONObject("selection_test")
                     val point=LatLng(p.getDouble("latitude"),p.getDouble("longitude"))
