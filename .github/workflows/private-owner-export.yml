@@ -4,7 +4,11 @@ on:
     inputs:
       input_release:
         description: Private release tag containing authorized owner export and authorization.json
-        required: true
+        required: false
+      synthetic_smoke_test:
+        description: Test the private hosted workflow with generated names only; no input or permission needed
+        type: boolean
+        default: false
       export_file:
         description: Export uploaded through private Releases web interface
         type: choice
@@ -30,19 +34,21 @@ jobs:
         with: {python-version: '3.12'}
       - run: python -m pip install -r pipeline/requirements.txt
       - name: Validate private input references
-        env: {INPUT_RELEASE: '${{ inputs.input_release }}', OWNER_REVISION: '${{ inputs.revision }}', OWNER_TABLE: '${{ inputs.table }}'}
+        env: {INPUT_RELEASE: '${{ inputs.input_release }}', OWNER_REVISION: '${{ inputs.revision }}', OWNER_TABLE: '${{ inputs.table }}', SYNTHETIC_ONLY: '${{ inputs.synthetic_smoke_test }}'}
         run: |
           python - <<'PY'
           import os,re
-          assert re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,63}',os.environ['INPUT_RELEASE'])
+          if os.environ['SYNTHETIC_ONLY']!='true':assert re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,63}',os.environ['INPUT_RELEASE'])
           assert re.fullmatch(r'[1-9][0-9]{0,8}',os.environ['OWNER_REVISION'])
           assert re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]{0,62}',os.environ['OWNER_TABLE'])
           PY
       - name: Retrieve private input and pinned public geometry without logging owner records
-        env: {GH_TOKEN: '${{ github.token }}', INPUT_RELEASE: '${{ inputs.input_release }}', EXPORT_FILE: '${{ inputs.export_file }}'}
+        env: {GH_TOKEN: '${{ github.token }}', INPUT_RELEASE: '${{ inputs.input_release }}', EXPORT_FILE: '${{ inputs.export_file }}', SYNTHETIC_ONLY: '${{ inputs.synthetic_smoke_test }}'}
         run: |
           mkdir -p private-data/input work/county-delivery
-          gh release download "$INPUT_RELEASE" --pattern "$EXPORT_FILE" --pattern authorization.json --dir private-data/input
+          if [ "$SYNTHETIC_ONLY" != true ]; then
+            gh release download "$INPUT_RELEASE" --pattern "$EXPORT_FILE" --pattern authorization.json --dir private-data/input
+          fi
           gh release download marion-county-v0.4.0 --repo imissthefuhrer/Oregon-Land-Explorer --pattern '*.olepack' --pattern SHA256SUMS.txt --dir work/county-delivery
           python - <<'PY'
           from pathlib import Path
@@ -53,9 +59,13 @@ jobs:
           assert len(list(root.glob('marion-*.olepack')))==17
           PY
       - name: Exact stable-key matching and private package generation
-        env: {EXPORT_FILE: '${{ inputs.export_file }}', OWNER_TABLE: '${{ inputs.table }}', OWNER_REVISION: '${{ inputs.revision }}'}
+        env: {EXPORT_FILE: '${{ inputs.export_file }}', OWNER_TABLE: '${{ inputs.table }}', OWNER_REVISION: '${{ inputs.revision }}', SYNTHETIC_ONLY: '${{ inputs.synthetic_smoke_test }}'}
         run: |
-          python -m pipeline.owners --base work/county-delivery --export "private-data/input/$EXPORT_FILE" --metadata private-data/input/authorization.json --table "$OWNER_TABLE" --revision "$OWNER_REVISION" --output private-data/delivery
+          if [ "$SYNTHETIC_ONLY" = true ]; then
+            python -m pipeline.owners --base work/county-delivery --export private-data/input/synthetic.csv --metadata private-data/input/synthetic.json --revision "$OWNER_REVISION" --output private-data/delivery --synthetic --generate-synthetic
+          else
+            python -m pipeline.owners --base work/county-delivery --export "private-data/input/$EXPORT_FILE" --metadata private-data/input/authorization.json --table "$OWNER_TABLE" --revision "$OWNER_REVISION" --output private-data/delivery
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: private-marion-ownership

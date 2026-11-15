@@ -46,6 +46,7 @@ def check_authorization(metadata, synthetic=False):
     if synthetic:
         if metadata.get('test_data') is not True:raise ValueError('Synthetic mode requires test_data=true')
     else:
+        if metadata.get('test_data') is True:raise ValueError('Synthetic inputs require explicit synthetic mode')
         if os.environ.get('GITHUB_ACTIONS')!='true' or os.environ.get('OLE_REPOSITORY_PRIVATE')!='true':
             raise ValueError('Production owner processing requires a private hosted repository')
         if metadata.get('private_offline_use_authorized') is not True:
