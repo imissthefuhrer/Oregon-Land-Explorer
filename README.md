@@ -31,6 +31,10 @@ and activation. No development software is required on the user's computer.
 Production ownership databases must never be uploaded to this public repository,
 its issues, releases or public artifacts.
 
+[Executed ownership tests, storage sizes and latency/memory measurements](docs/OWNERSHIP-VERIFICATION.md)
+include full county synthetic matching, airplane-mode selection, upgrade/rollback,
+600 pan/zoom operations and original real-owner/GPS/aerial regressions.
+
 **Phone-tested fallback:** [unchanged v0.3.2](https://github.com/imissthefuhrer/Oregon-Land-Explorer/releases/tag/verified-v0.3.2).
 Android normally blocks downgrades; do not uninstall to force one.
 
