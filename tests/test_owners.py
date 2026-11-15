@@ -54,6 +54,7 @@ def test_every_association_reconciled_without_objectid_join(tmp_path):
 
 
 def test_production_gated_before_reading_input(tmp_path,monkeypatch):
+    monkeypatch.setenv('OLE_REPOSITORY_PRIVATE','false')
     metadata={'source':'county export','data_as_of':'2026-01-01','authorization_reference':'pending'}
     with pytest.raises(ValueError,match='private hosted'):owners.build([],tmp_path/'absent.csv',metadata,tmp_path/'out')
     monkeypatch.setenv('GITHUB_ACTIONS','true');monkeypatch.setenv('OLE_REPOSITORY_PRIVATE','true')
