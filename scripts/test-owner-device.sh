@@ -12,6 +12,12 @@ instrument() {
   grep -q 'OK (' "$2"
   ! grep -q 'FAILURES\|INSTRUMENTATION_FAILED\|Process crashed' "$2"
 }
+if [ "${OLE_LOOKUP_ONLY:-false}" = true ]; then
+  adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+  adb install -r android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+  instrument 'org.oregonlandexplorer.OwnerLookupBenchmarkTest' output/owner-exact-lookup-instrumentation.txt
+  exit 0
+fi
 # The same signing key must permit an upgrade without clearing installed maps.
 adb install -r work/v04/oregon-land-explorer-v0.4.0.apk
 adb install -r android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk

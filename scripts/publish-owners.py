@@ -14,6 +14,8 @@ repo='imissthefuhrer/Oregon-Land-Explorer'
 info=json.loads(gh('api',f'repos/{repo}/actions/runs/{run}'))
 assert info['conclusion']=='success' and info['head_branch']=='feat/private-offline-owners'
 assert info['path']=='.github/workflows/owner-android.yml'
+tag=json.loads(gh('api',f'repos/{repo}/git/ref/tags/private-owners-v0.5.0'))
+assert tag['object']['type']=='commit' and tag['object']['sha']==info['head_sha'], 'Release tag must identify the exact verified app source'
 root=Path('work/owner-publish');apk=root/'apk';evidence=root/'evidence';delivery=root/'delivery'
 delivery.mkdir(parents=True)
 gh('run','download',run,'--name','oregon-land-explorer-owner-apk','--dir',str(apk))
@@ -76,4 +78,4 @@ Private preparation and authorization details: https://github.com/{repo}/blob/fe
 ''')
 gh('release','create','private-owners-v0.5.0',*[str(p) for p in sorted(delivery.iterdir())],
    '--repo',repo,'--target',info['head_sha'],'--title','Oregon Land Explorer v0.5.0 — private offline owners',
-   '--notes-file',str(notes),'--prerelease')
+   '--notes-file',str(notes),'--prerelease','--verify-tag')

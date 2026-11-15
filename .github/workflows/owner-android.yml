@@ -4,6 +4,11 @@ on:
     branches: [feat/private-offline-owners]
     paths: ['.github/workflows/owner-android.yml']
   workflow_dispatch:
+    inputs:
+      lookup_only:
+        description: Focused exact SQLite/selection latency measurement; no releasable APK artifact
+        type: boolean
+        default: false
 permissions: {contents: read, actions: read}
 jobs:
   verify:
@@ -58,6 +63,7 @@ jobs:
           sudo udevadm trigger --name-match=kvm
       - name: Upgrade v0.4 without data loss; all-county owner lookup in airplane mode
         uses: reactivecircus/android-emulator-runner@v2
+        env: {OLE_LOOKUP_ONLY: '${{ inputs.lookup_only }}'}
         with:
           api-level: 35
           arch: x86_64
@@ -67,12 +73,14 @@ jobs:
           emulator-options: -no-window -gpu host -feature -Vulkan -noaudio -no-boot-anim -camera-back none
           script: bash scripts/test-owner-device.sh
       - name: Prepare verified phone APK
+        if: ${{ !inputs.lookup_only }}
         run: |
           mkdir -p output/owner-app
           cp android/app/build/outputs/apk/debug/app-debug.apk output/owner-app/oregon-land-explorer-v0.5.0.apk
           cp output/apk-validation.json output/owner-app/
           cd output/owner-app && sha256sum *.apk > SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
+        if: ${{ !inputs.lookup_only }}
         with: {name: oregon-land-explorer-owner-apk, path: output/owner-app/, retention-days: 30}
       - uses: actions/upload-artifact@v4
         if: always()
