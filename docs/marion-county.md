@@ -37,6 +37,15 @@ The bulk OSM outdoor basemap is independent of parcels. It is available under
 ODbL 1.0, with © OpenStreetMap contributors attribution and Geofabrik source
 timestamp/hash. No OSM public tile servers or countywide aerial exports are used.
 
+Geofabrik direct connections failed repeatedly from GitHub runners during this
+milestone. The hosted workflow also offers the explicitly selected official
+OpenStreetMap France US West bulk extract:
+https://download.openstreetmap.fr/extracts/north-america/us-west.osm.pbf
+This uses the same ODbL data model, Osmium clipping, Tilemaker profile and offline
+style. It is a larger preparation download, not a larger area installed on the
+phone. No provider is silently substituted: the selected URL, source timestamp,
+checksum and provider attribution accompany the resulting county package.
+
 ## Hosted preparation
 
 Run **Full Marion County GIS** on this branch in Actions. No desktop GIS or

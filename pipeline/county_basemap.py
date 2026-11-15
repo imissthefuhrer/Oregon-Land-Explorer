@@ -31,7 +31,11 @@ def main():
     w,s,e,n=county.bounds; bounds=[w-.025,s-.025,e+.025,n+.025]
     config={'id':'marion-outdoors','name':'All Marion County outdoor basemap','bbox':bounds,'minzoom':8,'maxzoom':15,'revision':int(os.environ.get('OLE_DATA_REVISION','1')),
             'targets':json.loads(Path('regions/corridor.json').read_text())['targets']}
-    url='https://download.geofabrik.de/north-america/us/oregon-latest.osm.pbf'
+    url=os.environ.get('OLE_OSM_SOURCE','https://download.geofabrik.de/north-america/us/oregon-latest.osm.pbf')
+    allowed={'https://download.geofabrik.de/north-america/us/oregon-latest.osm.pbf':'Geofabrik Oregon',
+             'https://download.openstreetmap.fr/extracts/north-america/us-west.osm.pbf':'OpenStreetMap France US West'}
+    assert url in allowed, 'Choose an explicitly supported public OSM bulk provider'
+    provider=allowed[url]
     source=work/'oregon.osm.pbf'
     if not source.exists():
         run('curl','-4','--fail','--location','--retry','4','--retry-all-errors','--connect-timeout','30','--max-time','600','--output',work/'oregon.download',url)
@@ -78,7 +82,7 @@ def main():
         'tool':'Tilemaker v3.2.0','schema':'oregon-outdoor-v1','license':'https://opendatacommons.org/licenses/odbl/1-0/',
         'boundary_source':BOUNDARY,'boundary_sha256':sha(output/'county-boundary.json')})
     finish(root,config,'vector',tile_count=report['tiles'],tile_schema='oregon-outdoor-v1',
-        attribution='© OpenStreetMap contributors • ODbL 1.0 • Geofabrik Oregon bulk extract; county boundary Marion County IT-GIS')
+        attribution='© OpenStreetMap contributors • ODbL 1.0 • '+provider+' bulk extract; county boundary Marion County IT-GIS')
     write(output/'basemap-storage.json',{'package_bytes':(output/'marion-outdoors.olepack').stat().st_size,'pmtiles_bytes':(root/'basemap.pmtiles').stat().st_size})
 
 

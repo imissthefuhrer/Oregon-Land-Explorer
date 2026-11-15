@@ -5,6 +5,13 @@ on:
       reuse_parcels_run:
         description: Optional prior run with successful extraction and all six parcel shards (basemap-only retry/update)
         required: false
+      osm_source:
+        description: Explicit public bulk provider (no tile servers)
+        type: choice
+        options:
+          - https://download.geofabrik.de/north-america/us/oregon-latest.osm.pbf
+          - https://download.openstreetmap.fr/extracts/north-america/us-west.osm.pbf
+        default: https://download.geofabrik.de/north-america/us/oregon-latest.osm.pbf
   push:
     branches: [feat/marion-county-offline]
     paths: ['pipeline/county*.py', 'pipeline/parcel_tiles.py', '.github/workflows/marion-county.yml']
@@ -13,6 +20,7 @@ permissions:
   actions: read
 env:
   OLE_DATA_REVISION: ${{ github.run_number }}
+  OLE_OSM_SOURCE: ${{ inputs.osm_source || 'https://download.geofabrik.de/north-america/us/oregon-latest.osm.pbf' }}
 concurrency:
   group: county-gis-${{ github.ref }}-${{ github.sha }}
   cancel-in-progress: false
