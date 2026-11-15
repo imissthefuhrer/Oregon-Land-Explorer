@@ -19,3 +19,5 @@ android/app/src/androidTest/assets/
 *.jks
 *.sqlite
 *.sqlite-*
+private-data/
+owner-exports/

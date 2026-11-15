@@ -154,7 +154,11 @@ class PackageStore(private val context: Context) {
         }
         val kind=if(m.getInt("schema_version")==1) "legacy" else m.getString("kind")
         require(m.getInt("schema_version")!=3 || kind=="parcels") { "Schema 3 is reserved for optimized parcels" }
-        require(kind in listOf("legacy","vector","parcels","aerial")) { "Unsupported package kind" }
+        require(kind in listOf("legacy","vector","parcels","aerial","owners")) { "Unsupported package kind" }
+        if(kind=="owners") {
+            require(m.getInt("schema_version")==2 && files==setOf("owners.sqlite","owner-validation.json","source-metadata.json")) { "Invalid ownership payload" }
+            OwnerDatabase.validate(File(dir,"owners.sqlite"),m,deep)
+        }
         if(kind in listOf("legacy","parcels")) {
             require(files.containsAll(if(m.getInt("schema_version")==3) listOf("parcels.pmtiles","parcels.sqlite","source-record-hashes.json","source-metadata.json") else listOf("parcels.geojson","source-record-hashes.json","source-metadata.json")))
             if(m.getInt("schema_version")==3) {
@@ -184,8 +188,8 @@ class PackageStore(private val context: Context) {
     companion object {
         private val LOCK=Any()
         private const val MAX_TOTAL=512L*1024*1024
-        private val ALLOWED=setOf("manifest.json","basemap.pmtiles","aerial.pmtiles","parcels.geojson","parcels.pmtiles","parcels.sqlite","parcel-validation.json","source-record-hashes.json","source-metadata.json")
-        private fun limit(name: String)=when(name) { "manifest.json" -> 128L*1024; "parcel-validation.json" -> 128L*1024; "parcels.geojson" -> 64L*1024*1024; "source-record-hashes.json","source-metadata.json" -> 16L*1024*1024; else -> 384L*1024*1024 }
+        private val ALLOWED=setOf("manifest.json","basemap.pmtiles","aerial.pmtiles","parcels.geojson","parcels.pmtiles","parcels.sqlite","parcel-validation.json","source-record-hashes.json","source-metadata.json","owners.sqlite","owner-validation.json")
+        private fun limit(name: String)=when(name) { "manifest.json","owner-validation.json" -> 128L*1024; "parcel-validation.json" -> 128L*1024; "parcels.geojson" -> 64L*1024*1024; "source-record-hashes.json","source-metadata.json" -> 16L*1024*1024; else -> 384L*1024*1024 }
         fun sha(file: File): String {
             val digest=MessageDigest.getInstance("SHA-256")
             file.inputStream().use { input -> val buffer=ByteArray(65536);while(true) { val n=input.read(buffer);if(n<0) break;digest.update(buffer,0,n) } }
