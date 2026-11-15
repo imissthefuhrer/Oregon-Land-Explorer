@@ -1,0 +1,85 @@
+{
+  "max_records_per_package": 12000,
+  "partition_seeds": [
+    {
+      "id": "salem-west",
+      "name": "Salem west",
+      "bbox": [
+        -123.25,
+        44.84,
+        -123.0,
+        45.02
+      ]
+    },
+    {
+      "id": "salem-east",
+      "name": "Salem east and Keizer",
+      "bbox": [
+        -123.0,
+        44.84,
+        -122.86,
+        45.02
+      ]
+    },
+    {
+      "id": "gervais",
+      "name": "Gervais, Woodburn and St. Paul",
+      "bbox": [
+        -123.25,
+        45.02,
+        -122.86,
+        45.35
+      ]
+    },
+    {
+      "id": "silverton",
+      "name": "Silverton and Mount Angel",
+      "bbox": [
+        -122.86,
+        45.02,
+        -122.5,
+        45.35
+      ]
+    },
+    {
+      "id": "silver-falls",
+      "name": "Silver Falls and Scotts Mills",
+      "bbox": [
+        -122.86,
+        44.84,
+        -122.5,
+        45.02
+      ]
+    },
+    {
+      "id": "santiam-valley",
+      "name": "Stayton, Aumsville and Turner",
+      "bbox": [
+        -123.25,
+        44.4,
+        -122.5,
+        44.84
+      ]
+    },
+    {
+      "id": "gates",
+      "name": "Gates and western forest",
+      "bbox": [
+        -122.5,
+        44.4,
+        -122.15,
+        45.35
+      ]
+    },
+    {
+      "id": "detroit",
+      "name": "Detroit, Breitenbush and eastern forest",
+      "bbox": [
+        -122.15,
+        44.4,
+        -121.4,
+        45.35
+      ]
+    }
+  ]
+}

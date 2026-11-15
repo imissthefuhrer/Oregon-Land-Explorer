@@ -5,6 +5,7 @@ No tile-area clipping is used for selection; source/display fingerprints remain
 bound to unquantized geometry and attributes in SQLite and the original audit.
 """
 import gzip
+import hashlib
 import json
 import math
 import sqlite3
@@ -32,6 +33,16 @@ APPLICATION_ID = 0x4F4C4550
 
 def compact(value):
     return json.dumps(value, separators=(',', ':'), ensure_ascii=False)
+
+
+def source_identity(props, manifest):
+    if manifest.get('identity_strategy') == 'taxlot-taxacct-sha256-v1':
+        assert manifest['source_namespace'] in ('marion-open', 'marion-county-owner')
+        assert props.get('TAXLOT') and props.get('TAXACCT')
+        value = json.dumps([props['TAXLOT'],props['TAXACCT']], sort_keys=True, separators=(',', ':'))
+        return manifest['source_namespace']+':'+hashlib.sha256(value.encode()).hexdigest()
+    assert not manifest.get('identity_strategy') and not manifest.get('source_namespace')
+    return str(props['OBJECTID'])
 
 
 def mercator(x, y, z=None):
@@ -72,7 +83,7 @@ def build_database(path, data, audit, manifest):
             if len(geometry.encode()) > 8 * 1024 * 1024:
                 raise ValueError(f'Parcel exceeds single-feature decode budget: {source_id}')
             db.execute('INSERT INTO parcels VALUES (?,?,?,?,?,?,?,?,?,?)',
-                       (int(source_id), COUNTY, source_id, COUNTY + ':' + source_id,
+                       (int(source_id), COUNTY, source_identity(props,manifest), COUNTY + ':' + source_identity(props,manifest),
                         props.get('TAXLOT'), props.get('OWNERNAME'), props.get('ACRES'),
                         compact(props), geometry, compact(record)))
             w, s, e, n = geom.bounds
@@ -116,7 +127,7 @@ def build_tiles(path, data, manifest):
                 # Every source identity must still survive at HIGH (validated below).
                 polygon = set_precision(g.intersection(clip), width / EXTENT)
                 line = set_precision(g.boundary.intersection(clip), width / EXTENT)
-                props = {'parcel_key': COUNTY + ':' + str(f['properties']['OBJECTID'])}
+                props = {'parcel_key': COUNTY + ':' + source_identity(f['properties'],manifest)}
                 if not polygon.is_empty and polygon.geom_type in ('Polygon', 'MultiPolygon'):
                     fills.append({'geometry': polygon, 'properties': props, 'id': f['properties']['OBJECTID']})
                 if not line.is_empty and line.geom_type in ('LineString', 'MultiLineString'):
@@ -149,12 +160,20 @@ def validate_optimized(root, manifest):
         assert db.execute('PRAGMA integrity_check').fetchone()[0] == 'ok'
 
         keys = set(); exact = {}; total_cells = 0
+        attributes=None
+        if manifest.get('identity_strategy'):
+            attributes=json.loads((root/'source-metadata.json').read_text())['attribute_fingerprints']
         audit = json.loads((root/'source-record-hashes.json').read_text())
         for id, county, sid, key, props, geometry, record in db.execute('SELECT id,county,source_id,parcel_key,properties,geometry,audit FROM parcels'):
-            assert county == COUNTY and str(id) == sid and key == county + ':' + sid
             f = {'geometry': json.loads(geometry), 'properties': json.loads(props)}
+            assert county == COUNTY and str(id) == str(f['properties']['OBJECTID']) and sid == source_identity(f['properties'],manifest) and key == county + ':' + sid
+            if attributes is not None:
+                fields=['OBJECTID','TAXLOT','TAXACCT','ACRES','LASTUPDATE']
+                if manifest['source_namespace']=='marion-county-owner':fields.append('OWNERNAME')
+                source_attributes={k:f['properties'].get(k) for k in fields}
+                assert hashlib.sha256(json.dumps(source_attributes,sort_keys=True,separators=(',', ':')).encode()).hexdigest()==attributes[str(id)], ('source attribute mismatch',id)
             record = json.loads(record)
-            assert record == audit[sid]
+            assert record == audit[str(id)]
             assert fingerprint(f) == (record['display_sha256'] if isinstance(record, dict) else record)
             g = shape(f['geometry']); assert g.is_valid and not g.is_empty
             if isinstance(record, dict):

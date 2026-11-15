@@ -26,6 +26,9 @@ object ParcelDatabase {
     }
 
     fun validate(file: File, manifest: JSONObject, deep: Boolean) {
+        val stable=manifest.optString("identity_strategy")=="taxlot-taxacct-sha256-v1"
+        require(manifest.optString("identity_strategy").isEmpty() || stable) { "Unsupported parcel identity strategy" }
+        if(stable) require(manifest.getString("source_namespace") in listOf("marion-open","marion-county-owner"))
         open(file).use { db ->
             fun scalar(sql: String)=db.rawQuery(sql,null).use { require(it.moveToFirst());it.getString(0) }
             require(scalar("PRAGMA application_id").toInt()==APPLICATION_ID && scalar("PRAGMA user_version")=="2") { "Unsupported parcel database" }
@@ -35,7 +38,8 @@ object ParcelDatabase {
             require(scalar("SELECT count(*) FROM parcel_bounds").toInt()==manifest.getInt("parcel_count")) { "Spatial count mismatch" }
             require(scalar("SELECT value FROM metadata WHERE key='extracted_at'")==manifest.getString("extracted_at")) { "Source date mismatch" }
             require(scalar("SELECT value FROM metadata WHERE key='county'")==manifest.getString("county")) { "County mismatch" }
-            require(scalar("SELECT count(*) FROM parcels p LEFT JOIN parcel_bounds b ON p.id=b.id WHERE b.id IS NULL OR p.parcel_key!=p.county||':'||p.source_id OR CAST(p.id AS TEXT)!=p.source_id OR p.county!='${manifest.getString("county")}' OR length(p.geometry)>$MAX_GEOMETRY")=="0") { "Invalid parcel identities or bounds" }
+            val legacyIdentity=if(stable) "" else " OR CAST(p.id AS TEXT)!=p.source_id"
+            require(scalar("SELECT count(*) FROM parcels p LEFT JOIN parcel_bounds b ON p.id=b.id WHERE b.id IS NULL OR p.parcel_key!=p.county||':'||p.source_id$legacyIdentity OR p.county!='${manifest.getString("county")}' OR length(p.geometry)>$MAX_GEOMETRY")=="0") { "Invalid parcel identities or bounds" }
             require(scalar("SELECT count(*) FROM (SELECT parcel_key FROM parcels GROUP BY parcel_key HAVING count(*)>1)")=="0")
             require(scalar("SELECT count(*) FROM pragma_index_list('parcels') WHERE \"unique\"=1").toInt()>=2) { "Missing identity indexes" }
             if(deep) {
@@ -43,7 +47,7 @@ object ParcelDatabase {
                 // Stock Android SQLite has no R-Tree module. Validate indexed grid
                 // coverage against every exact polygon, without loading the dataset.
                 var totalCells=0L
-                db.rawQuery("SELECT p.parcel_key,p.properties,p.geometry,b.west,b.south,b.east,b.north FROM parcels p JOIN parcel_bounds b ON p.id=b.id",null).use { c ->
+                db.rawQuery("SELECT p.parcel_key,p.properties,p.geometry,b.west,b.south,b.east,b.north,p.id FROM parcels p JOIN parcel_bounds b ON p.id=b.id",null).use { c ->
                     while(c.moveToNext()) {
                         val f=feature(c.getString(0),c.getString(1),c.getString(2))
                         val b=bounds(JSONObject(c.getString(2)))
@@ -52,10 +56,19 @@ object ParcelDatabase {
                         require(cells in 1..50000)
                         totalCells+=cells
                         db.rawQuery("SELECT count(*) FROM parcel_cells WHERE parcel_id=? AND cell_x BETWEEN ? AND ? AND cell_y BETWEEN ? AND ?",
-                            arrayOf(c.getString(0).substringAfter(':'),cell(b[0]).toString(),cell(b[2]).toString(),cell(b[1]).toString(),cell(b[3]).toString())).use { index ->
+                            arrayOf(c.getString(7),cell(b[0]).toString(),cell(b[2]).toString(),cell(b[1]).toString(),cell(b[3]).toString())).use { index ->
                             require(index.moveToFirst() && index.getLong(0)==cells) { "Spatial grid coverage mismatch" }
                         }
-                        require(f.getNumberProperty("OBJECTID").toLong().toString()==c.getString(0).substringAfter(':'))
+                        require(f.getNumberProperty("OBJECTID").toLong()==c.getLong(7))
+                        val expected=if(stable) {
+                            val p=JSONObject(c.getString(1))
+                            require(p.optString("TAXLOT").isNotEmpty() && p.optString("TAXACCT").isNotEmpty())
+                            // Canonical compact JSON matches the ASCII tax identifiers in the hosted builder.
+                            val pair=JSONArray().put(p.getString("TAXLOT")).put(p.getString("TAXACCT")).toString()
+                            val digest=java.security.MessageDigest.getInstance("SHA-256").digest(pair.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
+                            COUNTY+":"+manifest.getString("source_namespace")+":"+digest
+                        } else COUNTY+":"+c.getString(7)
+                        require(c.getString(0)==expected) { "Stable parcel identity does not match source attributes" }
                     }
                 }
                 require(scalar("SELECT count(*) FROM parcel_cells").toLong()==totalCells) { "Unexpected spatial grid entries" }
@@ -96,7 +109,10 @@ object ParcelDatabase {
 
     /** Exact point-in-polygon on the audited display geometry. Holes and MultiPolygons retained. */
     fun contains(feature: Feature, lat: Double, lon: Double): Boolean {
-        val g=JSONObject(feature.geometry()!!.toJson()); val c=g.getJSONArray("coordinates")
+        return containsGeometry(JSONObject(feature.geometry()!!.toJson()),lat,lon)
+    }
+    fun containsGeometry(g: JSONObject, lat: Double, lon: Double): Boolean {
+        val c=g.getJSONArray("coordinates")
         fun ring(r: JSONArray): Int {
             var inside=false
             for(i in 0 until r.length()-1) {

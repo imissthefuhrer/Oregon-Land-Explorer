@@ -18,13 +18,16 @@ def run(*args):
     subprocess.run(list(map(str, args)), check=True)
 
 
-def validate_vector(path, config):
-    counts = Counter(); names = set(); total = 0
+def validate_vector(path, config, allow_empty=False):
+    counts = Counter(); names = set(); total = 0; empty = 0;max_raw=0
     with path.open('rb') as f:
         source = MmapSource(f); reader = Reader(source)
         for (z,x,y), blob in all_tiles(source):
-            decoded = mapbox_vector_tile.decode(gzip.decompress(blob) if blob[:2] == b'\x1f\x8b' else blob)
-            assert decoded, f'Empty tile {z}/{x}/{y}'
+            raw=gzip.decompress(blob) if blob[:2] == b'\x1f\x8b' else blob
+            max_raw=max(max_raw,len(raw));assert len(raw)<=4*1024*1024, f'Tile exceeds Android decode budget {z}/{x}/{y}'
+            decoded = mapbox_vector_tile.decode(raw)
+            assert decoded or allow_empty, f'Empty tile {z}/{x}/{y}'
+            if not decoded: empty += 1
             total += 1
             if z == config['maxzoom']:
                 for layer, data in decoded.items():
@@ -60,7 +63,7 @@ def validate_vector(path, config):
         aliases={'Willamette Vision Educational Trail':'Willamette Vision Education Trail','Howard Creek Loop':'Howard Creek Loop Trail','Buck Mountain Loop':'Buck Mountain Loop Trail','Newt Loop':'Newt Loop Trail','Racket Ridge Trail':'Rackett Ridge Trail','Racket Ridge Connector Trail':'Rackett Ridge Connector',"Roemer’s Meadow Trail":"Roemer's Meadow (aka Boomer Meadow)",'Silver Ridge Road':'Silver Ridge Road Southeast','North Fork Road':'North Fork Road Southeast'}
         target['official_map_name_variants_found']={name:aliases[name] for name in unmatched if aliases.get(name,'').casefold() in present}
         target['official_map_names_not_found']=[name for name in unmatched if name not in target['official_map_name_variants_found']]
-    return {'result':'PASS','tiles':total,'maxzoom_features_with_edge_duplicates':dict(counts),
+    return {'result':'PASS','tiles':total,'source_empty_tiles':empty,'max_uncompressed_tile_bytes':max_raw,'maxzoom_features_with_edge_duplicates':dict(counts),
             'targets':targets,'limits':'Tile counts include edge duplicates. OSM completeness and current trail closures are not independently established.'}
 
 

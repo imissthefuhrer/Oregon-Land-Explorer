@@ -1,0 +1,141 @@
+name: Full Marion County GIS
+on:
+  workflow_dispatch:
+    inputs:
+      reuse_parcels_run:
+        description: Optional prior run with successful extraction and all six parcel shards (basemap-only retry/update)
+        required: false
+      reuse_basemap_run:
+        description: Optional prior run with successful county basemap validation (delivery-only recovery)
+        required: false
+      osm_source:
+        description: Explicit public bulk provider (no tile servers)
+        type: choice
+        options:
+          - https://download.geofabrik.de/north-america/us/oregon-latest.osm.pbf
+          - https://download.openstreetmap.fr/extracts/north-america/us-west.osm.pbf
+        default: https://download.geofabrik.de/north-america/us/oregon-latest.osm.pbf
+  push:
+    branches: [feat/marion-county-offline]
+    paths: ['pipeline/county*.py', 'pipeline/parcel_tiles.py', 'regions/marion-county.json', '.github/workflows/marion-county.yml']
+permissions:
+  contents: read
+  actions: read
+env:
+  OLE_DATA_REVISION: ${{ github.run_number }}
+  OLE_OSM_SOURCE: ${{ inputs.osm_source || 'https://download.geofabrik.de/north-america/us/oregon-latest.osm.pbf' }}
+concurrency:
+  group: county-gis-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
+jobs:
+  extract:
+    if: ${{ !inputs.reuse_parcels_run }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: python -m pip install -r pipeline/requirements.txt
+      - uses: actions/cache/restore@v4
+        with:
+          path: work/county-checkpoints
+          key: marion-checkpoints-${{ github.run_id }}
+          restore-keys: marion-checkpoints-
+      - name: Extract official open data only; ownership is never requested
+        run: python -m pipeline.county extract
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: work/county-checkpoints
+          key: marion-checkpoints-${{ github.run_id }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: county-open-data-checkpoints
+          path: output/county/
+          retention-days: 7
+  packages:
+    needs: extract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0,1,2,3,4,5]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: python -m pip install -r pipeline/requirements.txt
+      - uses: actions/download-artifact@v4
+        with: {name: county-open-data-checkpoints, path: output/county}
+      - name: Build and independently decode schema 3 parcel packages
+        run: python -m pipeline.county package --shard ${{ matrix.shard }} --shards 6
+      - uses: actions/upload-artifact@v4
+        with:
+          name: marion-parcels-${{ matrix.shard }}
+          path: |
+            output/county/*.olepack
+            output/county/*/parcel-validation.json
+          retention-days: 30
+  basemap:
+    if: ${{ !inputs.reuse_basemap_run }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: python -m pip install -r pipeline/requirements.txt
+      - name: Build pinned Tilemaker on hosted Linux
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y osmium-tool libboost-dev libboost-filesystem-dev libboost-program-options-dev libboost-system-dev lua5.3 liblua5.3-dev libshp-dev libsqlite3-dev rapidjson-dev
+          git clone --depth 1 --branch v3.2.0 https://github.com/systemed/tilemaker.git work/tilemaker
+          make -C work/tilemaker -j2
+          sudo make -C work/tilemaker install
+      - name: Build complete county outdoor map, validate every county tile
+        run: python -m pipeline.county_basemap
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: marion-county-basemap
+          path: |
+            output/county-basemap/*.olepack
+            output/county-basemap/*.json
+          retention-days: 30
+  delivery:
+    needs: [extract, packages, basemap]
+    if: ${{ always() && (needs.basemap.result == 'success' || inputs.reuse_basemap_run != '') && (needs.packages.result == 'success' || inputs.reuse_parcels_run != '') }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: python -m pip install -r pipeline/requirements.txt
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: marion-parcels-*
+          path: output/delivery
+          merge-multiple: true
+          run-id: ${{ inputs.reuse_parcels_run || github.run_id }}
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: marion-county-basemap
+          path: output/delivery
+          run-id: ${{ inputs.reuse_basemap_run || github.run_id }}
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: county-open-data-checkpoints
+          path: work/extracted
+          run-id: ${{ inputs.reuse_parcels_run || github.run_id }}
+          github-token: ${{ github.token }}
+      - name: Reconcile delivery files and produce catalog and checksums
+        run: |
+          python -m pipeline.county_delivery
+          python -m pipeline.county_phone_validation --source output/delivery
+      - uses: actions/upload-artifact@v4
+        with: {name: marion-county-offline-maps, path: output/delivery/, retention-days: 30}
