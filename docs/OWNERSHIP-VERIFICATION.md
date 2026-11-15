@@ -94,6 +94,13 @@ its geography differs from the county run. Every observed county navigation samp
 was below 200 MiB. PSS includes instrumentation; transient import peak was not sampled.
 The report's final post-removal memory value is not an active-navigation measurement.
 
+The additional original-region comparison run also reconfirmed the retained
+disk-backed engine's memory behavior: after 600 operations with both old expanded
+regions, the legacy PR #4 GeoJSON implementation used 2,051 MiB PSS versus
+132.9 MiB for the current engine (93.5% lower). Current-engine navigation samples
+were 121.8–133.3 MiB in that scenario. This comparison uses the old regional data;
+the full-county ownership scenario above is separate.
+
 Existing county downloads remain 38.63 MiB basemap plus 149.10 MiB parcels;
 installed county payload remains approximately 359.15 MiB. Real owner-package
 sizes will depend on actual names and match status and have not been measured.
