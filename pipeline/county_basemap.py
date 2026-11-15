@@ -1,6 +1,7 @@
 """Full-county outdoor PMTiles from bulk OSM; no imagery or public tile requests."""
 import gzip
 import json
+import os
 import subprocess
 import urllib.request
 from pathlib import Path
@@ -12,6 +13,7 @@ from pmtiles.writer import Writer
 from pmtiles.tile import zxy_to_tileid
 from shapely.geometry import shape, box
 from shapely.ops import transform
+from shapely.prepared import prep
 
 from .county import request, write, BOUNDARY
 from .build_corridor import run, validate_vector
@@ -27,7 +29,7 @@ def main():
     county=shape(boundary['features'][0]['geometry']);assert county.is_valid
     write(output/'county-boundary.json',boundary)
     w,s,e,n=county.bounds; bounds=[w-.025,s-.025,e+.025,n+.025]
-    config={'id':'marion-outdoors','name':'All Marion County outdoor basemap','bbox':bounds,'minzoom':8,'maxzoom':15,'revision':1,
+    config={'id':'marion-outdoors','name':'All Marion County outdoor basemap','bbox':bounds,'minzoom':8,'maxzoom':15,'revision':int(os.environ.get('OLE_DATA_REVISION','1')),
             'targets':json.loads(Path('regions/corridor.json').read_text())['targets']}
     url='https://download.geofabrik.de/north-america/us/oregon-latest.osm.pbf'
     source=work/'oregon.osm.pbf'
@@ -43,7 +45,7 @@ def main():
     # Explicit empty vector tiles represent land without mapped features. They
     # distinguish source emptiness from a missing/offline tile in completeness checks.
     empty=gzip.compress(mapbox_vector_tile.encode([{'name':'land','features':[]}]),mtime=0)
-    empties=0; projected=transform(mercator,county);required=0; classes=Counter()
+    empties=0; projected=prep(transform(mercator,county));required=0; classes=Counter()
     with (work/'raw.pmtiles').open('rb') as f, (root/'basemap.pmtiles').open('wb') as dest:
         reader=Reader(MmapSource(f));writer=Writer(dest)
         for z,x,y in sorted(tile_list(bounds,8,15),key=lambda t:zxy_to_tileid(*t)):
@@ -52,7 +54,7 @@ def main():
             writer.write_tile(zxy_to_tileid(z,x,y),blob)
             if projected.intersects(box(*tile_bounds(z,x,y))): required+=1
         writer.finalize(reader.header(),reader.metadata())
-    report=validate_vector(root/'basemap.pmtiles',config)
+    report=validate_vector(root/'basemap.pmtiles',config,allow_empty=True)
     with (root/'basemap.pmtiles').open('rb') as f:
         reader=Reader(MmapSource(f))
         for z,x,y in tile_list(county.bounds,8,15):

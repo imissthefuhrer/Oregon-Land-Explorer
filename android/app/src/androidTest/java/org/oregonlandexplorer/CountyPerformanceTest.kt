@@ -176,7 +176,7 @@ class CountyPerformanceTest {
                     val entry=input.nextEntry ?: break
                     val data=input.readBytes()
                     output.putNextEntry(ZipEntry(entry.name))
-                    output.write(if(entry.name=="manifest.json") JSONObject(String(data)).put("revision",2).toString().toByteArray() else data)
+                    output.write(if(entry.name=="manifest.json") JSONObject(String(data)).put("revision",original.manifest.getInt("revision")+1).toString().toByteArray() else data)
                     output.closeEntry()
                 }
             }

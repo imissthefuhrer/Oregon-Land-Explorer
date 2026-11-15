@@ -6,6 +6,8 @@ on:
     paths: ['pipeline/county*.py', 'pipeline/parcel_tiles.py', '.github/workflows/marion-county.yml']
 permissions:
   contents: read
+env:
+  OLE_DATA_REVISION: ${{ github.run_number }}
 concurrency:
   group: county-gis-${{ github.ref }}-${{ github.sha }}
   cancel-in-progress: false

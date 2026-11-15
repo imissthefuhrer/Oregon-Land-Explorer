@@ -19,6 +19,7 @@ from shapely import make_valid
 from shapely.geometry import shape, mapping, box
 from shapely.ops import unary_union
 from shapely.validation import explain_validity
+from shapely.prepared import prep
 
 from .packages import finish, sha
 from .parcels import fingerprint
@@ -147,9 +148,10 @@ def partition(features, boundary):
         ('gates', 'Gates and western forest', [-122.5,44.4,-122.15,45.35]),
         ('detroit', 'Detroit, Breitenbush and eastern forest', [-122.15,44.4,-121.4,45.35]),
     ]
-    groups = {s[0]: [] for s in seeds}
+    groups = {s[0]: [] for s in seeds};points={};prepared=prep(boundary)
     for feature in features:
-        g = shape(feature['geometry']); point = g.intersection(boundary).representative_point()
+        g = shape(feature['geometry']); point = (g if prepared.covers(g) else g.intersection(boundary)).representative_point()
+        points[feature['properties']['OBJECTID']]=point
         candidates = [s for s in seeds if box(*s[2]).covers(point)]
         if not candidates:
             raise ValueError(f'Parcel outside processing seeds: {point}')
@@ -165,7 +167,7 @@ def partition(features, boundary):
             halves = ([w,s,mid,n],[mid,s,e,n]) if axis == 0 else ([w,s,e,mid],[w,mid,e,n])
             buckets = [[],[]]
             for f in rows:
-                p = shape(f['geometry']).intersection(boundary).representative_point()
+                p = points[f['properties']['OBJECTID']]
                 buckets[int((p.x if axis == 0 else p.y) >= mid)].append(f)
             if max(len(b) for b in buckets) == len(rows) and max(e-w,n-s)<.001:
                 raise ValueError('Unpartitionable dense source cluster; review source')
@@ -205,7 +207,7 @@ def extract(output, checkpoint, owners=False):
         paths=list(pool.map(batch,range(0,len(inventory),500)))
     if ids(source)!=inventory or request(source).get('editingInfo')!=layer.get('editingInfo'):
         raise ValueError('Source changed during extraction; checkpoint retained; retry new snapshot')
-    features=[]; audits={}; outside=[]; stable=set(); attributes={}; all_seen=set()
+    features=[]; audits={}; outside=[]; stable=set(); attributes={}; all_seen=set();prepared=prep(boundary)
     for path in paths:
         for f in json.loads(path.read_text())['features']:
             p=f['properties']; oid=str(p['OBJECTID'])
@@ -217,7 +219,7 @@ def extract(output, checkpoint, owners=False):
             stable.add(identity); attributes[oid]=digest(p)
             p['owner_data_status']='authorized private extract' if owners else 'Withheld from county public download; owner information unavailable'
             g,audit=repair(f)
-            if not g.intersects(boundary): outside.append(int(oid)); continue
+            if not prepared.intersects(g): outside.append(int(oid)); continue
             audits[oid]=audit; features.append(f)
     assert all_seen==set(map(str,inventory))
     catalog=[]
@@ -232,9 +234,10 @@ def extract(output, checkpoint, owners=False):
         bbox=[min(b[0] for b in bounds),min(b[1] for b in bounds),max(b[2] for b in bounds),max(b[3] for b in bounds)]
         test=rows[len(rows)//2]; point=shape(test['geometry']).representative_point()
         geometry=group.pop('coverage_geometry')
-        m=finish(root,{**group,'bbox':bbox,'revision':1,'minzoom':12,'maxzoom':16},'parcels',
+        m=finish(root,{**group,'bbox':bbox,'revision':int(os.environ.get('OLE_DATA_REVISION','1')),'minzoom':12,'maxzoom':16},'parcels',
             parcel_source=source,source_namespace='marion-county-owner' if owners else 'marion-open',
             identity_strategy='taxlot-taxacct-sha256-v1',extracted_at=datetime.now(timezone.utc).isoformat(),
+            source_updated_at=datetime.fromtimestamp(layer['editingInfo']['dataLastEditDate']/1000,timezone.utc).isoformat() if layer.get('editingInfo',{}).get('dataLastEditDate') else None,
             attribution='Marion County Assessors Office / IT-GIS; approximate, not a survey. County disclaimer in source-metadata.json.',
             parcel_count=len(rows),owner_count=sum(bool(f['properties'].get('OWNERNAME')) for f in rows),
             owner_data_status='authorized' if owners else 'withheld',legal_access='Unknown',
@@ -267,7 +270,7 @@ def main():
         for i,pack in enumerate(catalog['packages']):
             if i%a.shards==a.shard:
                 print('Optimizing '+pack['id'],flush=True)
-                optimize(Path(a.output)/pack['id'],revision=1)
+                optimize(Path(a.output)/pack['id'],revision=pack['revision'])
 
 
 if __name__=='__main__': main()
