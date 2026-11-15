@@ -37,15 +37,19 @@ def request(url, **params):
     encoded = urllib.parse.urlencode({'f': 'json', **params})
     for attempt in range(5):
         try:
-            req = urllib.request.Request(url + '?' + encoded, headers={'User-Agent': 'OregonLandExplorer/0.4 county audit'})
+            # ArcGIS supports form POST for long object-ID lists. Avoid web-server
+            # query-string limits while respecting the layer's record limit.
+            req = urllib.request.Request(url if len(encoded)>1800 else url+'?'+encoded,
+                data=encoded.encode() if len(encoded)>1800 else None,
+                headers={'User-Agent': 'OregonLandExplorer/0.4 county audit'})
             with urllib.request.urlopen(req, timeout=90) as response:
                 value = json.load(response)
             if 'error' in value:
                 raise ValueError(str(value['error']))
             return value
-        except (OSError, ValueError):
+        except (OSError, ValueError) as error:
             if attempt == 4:
-                raise
+                raise RuntimeError(f'ArcGIS request failed: {url}: {error}') from error
             time.sleep(min(2 ** attempt, 16))
 
 
