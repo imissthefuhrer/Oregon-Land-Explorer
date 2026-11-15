@@ -148,9 +148,24 @@ class CountyPerformanceTest {
                 if(mode=="all-regions") {
                     val p=countyPacks.first().manifest.getJSONObject("selection_test")
                     val point=LatLng(p.getDouble("latitude"),p.getDouble("longitude"))
-                    scenario.onActivity { it.map!!.moveCamera(CameraUpdateFactory.newLatLngZoom(point,18.0));it.selectParcel(point) }
-                    assertTrue(device.wait(Until.hasObject(By.text("Property details")),10000))
-                    assertTrue(device.wait(Until.hasObject(By.textContains("Withheld from county public download")),10000))
+                    val idle=CountDownLatch(1)
+                    scenario.onActivity { a ->
+                        a.map!!.addOnCameraIdleListener { idle.countDown() }
+                        a.map!!.moveCamera(CameraUpdateFactory.newLatLngZoom(point,18.0))
+                    }
+                    assertTrue("Selection camera did not become idle",idle.await(10,TimeUnit.SECONDS))
+                    // Moving the camera intentionally cancels stale tap work. Tap
+                    // after the idle event, just as a person would, not in that move.
+                    scenario.onActivity { assertTrue("Parcel tap was not accepted",it.selectParcel(point)) }
+                    val title=By.text(java.util.regex.Pattern.compile("Property details|Overlapping parcels"))
+                    val shown=device.wait(Until.hasObject(title),10000)
+                    if(!shown) device.executeShellCommand("screencap -p /sdcard/Download/ole-evidence/county-popup-failure.png")
+                    assertTrue("Neither parcel details nor legitimate overlap chooser appeared",shown)
+                    if(device.hasObject(By.text("Overlapping parcels"))) {
+                        androidx.test.espresso.Espresso.onData(org.hamcrest.Matchers.anything()).atPosition(0).perform(click())
+                    }
+                    assertTrue("County owner popup missing",device.wait(Until.hasObject(By.text("Property details")),10000))
+                    assertTrue("Withheld-owner explanation missing",device.wait(Until.hasObject(By.textContains("Withheld from county public download")),10000))
                     device.executeShellCommand("screencap -p /sdcard/Download/ole-evidence/county-owner-withheld.png")
                     device.pressBack()
                 }
