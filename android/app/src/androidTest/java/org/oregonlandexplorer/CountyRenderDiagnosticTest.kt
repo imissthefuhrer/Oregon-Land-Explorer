@@ -24,7 +24,7 @@ class CountyRenderDiagnosticTest {
             assertTrue(ready);Thread.sleep(3000)
             val frame=CountDownLatch(1);var partial=0
             scenario.onActivity { a ->
-                a.mapView.addOnDidFinishRenderingMapListener { if(it) frame.countDown() else partial++ }
+                a.mapView.addOnDidFinishRenderingFrameListener { fully, _, _ -> if(fully) frame.countDown() else partial++ }
                 a.map!!.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(45.108,-122.897),16.0))
             }
             val complete=frame.await(45,TimeUnit.SECONDS)

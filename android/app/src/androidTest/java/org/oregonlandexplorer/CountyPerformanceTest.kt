@@ -91,7 +91,7 @@ class CountyPerformanceTest {
                 for((name,point) in anchors) {
                     val frame=CountDownLatch(1);val moved=SystemClock.elapsedRealtime()
                     scenario.onActivity { a ->
-                        a.mapView.addOnDidFinishRenderingMapListener { if(it) frame.countDown() }
+                        a.mapView.addOnDidFinishRenderingFrameListener { fully, _, _ -> if(fully) frame.countDown() }
                         assertTrue("Missing county basemap $name",a.region!!.contains(point.latitude,point.longitude))
                         a.map!!.moveCamera(CameraUpdateFactory.newLatLngZoom(point,16.0))
                     }
