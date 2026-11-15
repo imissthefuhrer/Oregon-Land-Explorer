@@ -17,7 +17,7 @@ on:
         default: https://download.geofabrik.de/north-america/us/oregon-latest.osm.pbf
   push:
     branches: [feat/marion-county-offline]
-    paths: ['pipeline/county*.py', 'pipeline/parcel_tiles.py', '.github/workflows/marion-county.yml']
+    paths: ['pipeline/county*.py', 'pipeline/parcel_tiles.py', 'regions/marion-county.json', '.github/workflows/marion-county.yml']
 permissions:
   contents: read
   actions: read

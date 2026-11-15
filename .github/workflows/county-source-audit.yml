@@ -1,6 +1,11 @@
 name: County non-owner source inventory comparison
 on:
   workflow_dispatch:
+    inputs:
+      unit_only:
+        description: Run GIS unit checks without querying live inventories again
+        type: boolean
+        default: false
   push:
     branches: [feat/marion-county-offline]
     paths: ['pipeline/source_inventory.py', '.github/workflows/county-source-audit.yml']
@@ -14,7 +19,9 @@ jobs:
       - uses: actions/setup-python@v5
         with: {python-version: '3.12'}
       - run: python -m pip install -r pipeline/requirements.txt
-      - run: python -m pipeline.source_inventory
+      - run: python -m pytest -q --junitxml=output/source-inventory/gis-tests.xml
+      - if: ${{ !inputs.unit_only }}
+        run: python -m pipeline.source_inventory
       - uses: actions/upload-artifact@v4
         if: always()
         with: {name: county-source-inventory-comparison, path: output/source-inventory/, retention-days: 30}

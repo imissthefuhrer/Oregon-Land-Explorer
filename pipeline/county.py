@@ -138,16 +138,14 @@ def repair(feature):
 
 def partition(features, boundary):
     """Geographic seeds; adaptively split dense cells. Full polygons are never cut."""
-    seeds = [
-        ('salem-west', 'Salem west', [-123.25,44.84,-123.0,45.02]),
-        ('salem-east', 'Salem east and Keizer', [-123.0,44.84,-122.86,45.02]),
-        ('gervais', 'Gervais, Woodburn and St. Paul', [-123.25,45.02,-122.86,45.35]),
-        ('silverton', 'Silverton and Mount Angel', [-122.86,45.02,-122.5,45.35]),
-        ('silver-falls', 'Silver Falls and Scotts Mills', [-122.86,44.84,-122.5,45.02]),
-        ('santiam-valley', 'Stayton, Aumsville and Turner', [-123.25,44.4,-122.5,44.84]),
-        ('gates', 'Gates and western forest', [-122.5,44.4,-122.15,45.35]),
-        ('detroit', 'Detroit, Breitenbush and eastern forest', [-122.15,44.4,-121.4,45.35]),
-    ]
+    config=json.loads((Path(__file__).resolve().parent.parent/'regions/marion-county.json').read_text())
+    assert 1<=config['max_records_per_package']<=12000, 'Keep the county preparation budget; split large regions instead'
+    maximum=min(MAX_RECORDS,config['max_records_per_package'])
+    seeds=[(s['id'],s['name'],s['bbox']) for s in config['partition_seeds']]
+    assert len({s[0] for s in seeds})==len(seeds)
+    for i,seed in enumerate(seeds):
+        bounds=seed[2];assert len(bounds)==4 and bounds[0]<bounds[2] and bounds[1]<bounds[3]
+        for other in seeds[:i]:assert box(*bounds).intersection(box(*other[2])).area<1e-12, 'Processing seed interiors must not overlap'
     groups = {s[0]: [] for s in seeds};points={};prepared=prep(boundary)
     for feature in features:
         g = shape(feature['geometry']); point = (g if prepared.covers(g) else g.intersection(boundary)).representative_point()
@@ -160,7 +158,7 @@ def partition(features, boundary):
     def split(id, name, bounds, rows):
         if not rows:
             return
-        if len(rows) > MAX_RECORDS:
+        if len(rows) > maximum:
             w,s,e,n = bounds; axis = 0 if (e-w)*.71 > n-s else 1
             # Fixed geographic midpoint retains comprehensible coverage, not record slicing.
             mid = ((w+e)/2 if axis == 0 else (s+n)/2)
@@ -224,6 +222,9 @@ def extract(output, checkpoint, owners=False):
     assert all_seen==set(map(str,inventory))
     catalog=[]
     for group in partition(features,boundary):
+        if owners:
+            group['id']=group['id'].replace('marion-','marion-owner-',1)
+            group['name']=group['name'].replace('(owners withheld)','(authorized owner data)')
         rows=group.pop('features'); root=output/group['id']; root.mkdir(exist_ok=True)
         write(root/'parcels.geojson',{'type':'FeatureCollection','features':rows})
         write(root/'source-record-hashes.json',{str(f['properties']['OBJECTID']):audits[str(f['properties']['OBJECTID'])] for f in rows})
@@ -237,7 +238,7 @@ def extract(output, checkpoint, owners=False):
         m=finish(root,{**group,'bbox':bbox,'revision':int(os.environ.get('OLE_DATA_REVISION','1')),'minzoom':12,'maxzoom':16},'parcels',
             parcel_source=source,source_namespace='marion-county-owner' if owners else 'marion-open',
             identity_strategy='taxlot-taxacct-sha256-v1',extracted_at=datetime.now(timezone.utc).isoformat(),
-            source_updated_at=datetime.fromtimestamp(layer['editingInfo']['dataLastEditDate']/1000,timezone.utc).isoformat() if layer.get('editingInfo',{}).get('dataLastEditDate') else None,
+            source_updated_at=datetime.fromtimestamp(layer['editingInfo']['dataLastEditDate']/1000,timezone.utc).isoformat() if (layer.get('editingInfo') or {}).get('dataLastEditDate') else None,
             attribution='Marion County Assessors Office / IT-GIS; approximate, not a survey. County disclaimer in source-metadata.json.',
             parcel_count=len(rows),owner_count=sum(bool(f['properties'].get('OWNERNAME')) for f in rows),
             owner_data_status='authorized' if owners else 'withheld',legal_access='Unknown',

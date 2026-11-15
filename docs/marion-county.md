@@ -64,6 +64,9 @@ The official county polygon defines inclusion. Complete source polygons
 intersecting it are assigned once to geographic seed regions, with recursive
 geographic splits for urban density above 12,000 records. Polygons, holes and
 multipart pieces remain intact; package seams never create property boundaries.
+Seed boundaries and lower preparation budgets are configurable in
+`regions/marion-county.json`; seed interiors cannot overlap and their union must
+cover the official county polygon. Configuration cannot raise safety limits.
 The app's query bounds contain the entire assigned geometry, including parts
 crossing a processing partition. Catalog partition polygons and query bounds are
 separate. Installing only one package still permits selection of all its complete
@@ -118,7 +121,9 @@ After obtaining written permission for the intended private offline use, use a
 private copy of the pipeline on a hosted runner. Set `OLE_PRIVATE_AUTHORIZED=true`
 and `OLE_AUTHORIZATION_REFERENCE` to the written agreement reference, then run
 `python -m pipeline.county extract --owners` and the same packaging/validation
-commands in that private environment. The public workflow has no owners input
+commands in that private environment. Owner-enabled packages use separate
+`marion-owner-*` IDs and a distinct identity namespace, so they cannot overwrite
+public boundary packages or attach owners through a reused OBJECTID. The public workflow has no owners input
 and never sets these variables. An authorization reference does not grant rights
 that the underlying agreement lacks. Keep production artifacts private and retain
 the source's disclaimer and permission scope. Do not put permission documents,
