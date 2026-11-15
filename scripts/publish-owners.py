@@ -77,5 +77,5 @@ Hosted verification: https://github.com/{repo}/actions/runs/{run} — full synth
 Private preparation and authorization details: https://github.com/{repo}/blob/feat/private-offline-owners/docs/PRIVATE-OWNERSHIP.md
 ''')
 gh('release','create','private-owners-v0.5.0',*[str(p) for p in sorted(delivery.iterdir())],
-   '--repo',repo,'--target',info['head_sha'],'--title','Oregon Land Explorer v0.5.0 — private offline owners',
+   '--repo',repo,'--title','Oregon Land Explorer v0.5.0 — private offline owners',
    '--notes-file',str(notes),'--prerelease','--verify-tag')
