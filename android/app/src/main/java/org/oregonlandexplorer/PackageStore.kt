@@ -76,8 +76,9 @@ class PackageStore(private val context: Context) {
             if(previous!=null && !bundled) {
                 val old=MapPackage(File(root,previous.getString("current")),true)
                 require(old.manifest.optString("identity_strategy")==m.optString("identity_strategy") && old.manifest.optString("source_namespace")==m.optString("source_namespace")) { "Package identity namespace changed; import a separately named region instead" }
-                if(!old.manifest.isNull("source_updated_at")) {
-                    require(!m.isNull("source_updated_at") && !java.time.Instant.parse(m.getString("source_updated_at")).isBefore(java.time.Instant.parse(old.manifest.getString("source_updated_at")))) { "Update contains an older source snapshot; installed data was preserved" }
+                val sourceFloor=previous.optString("max_source_updated_at",old.manifest.optString("source_updated_at",""))
+                if(sourceFloor.isNotEmpty() && sourceFloor!="null") {
+                    require(!m.isNull("source_updated_at") && !java.time.Instant.parse(m.getString("source_updated_at")).isBefore(java.time.Instant.parse(sourceFloor))) { "Update contains an older source snapshot; installed data was preserved" }
                 }
                 val newest=java.time.Instant.parse(previous.optString("max_extracted_at",old.manifest.getString("extracted_at")))
                 require(!java.time.Instant.parse(m.getString("extracted_at")).isBefore(newest)) { "Update contains older source data; installed data was preserved" }
@@ -91,6 +92,7 @@ class PackageStore(private val context: Context) {
             val record=JSONObject().put("current",destination.name).put("enabled",previous?.optBoolean("enabled",true) ?: true)
             record.put("max_revision",maxOf(revision,previous?.optInt("max_revision",revision) ?: revision))
             record.put("max_extracted_at",m.getString("extracted_at"))
+            if(!m.isNull("source_updated_at")) record.put("max_source_updated_at",m.getString("source_updated_at"))
             previous?.let { record.put("previous",it.getString("current")) }
             r.put(id,record);commit(r)
             return MapPackage(destination,record.getBoolean("enabled"))
@@ -140,6 +142,7 @@ class PackageStore(private val context: Context) {
         require(m.getString("name").length in 1..160 && m.optInt("revision",1)>0)
         require(m.getString("attribution").length in 1..4000)
         java.time.Instant.parse(m.getString("extracted_at")) // Reject ambiguous freshness metadata.
+        if(!m.isNull("source_updated_at")) java.time.Instant.parse(m.getString("source_updated_at"))
         val b=m.getJSONArray("bbox")
         require(b.length()==4 && (-125.0<=b.getDouble(0) && b.getDouble(0)<b.getDouble(2) && b.getDouble(2)<= -116.0) && (41.0<=b.getDouble(1) && b.getDouble(1)<b.getDouble(3) && b.getDouble(3)<=47.0)) { "Invalid Oregon coverage bounds" }
         val hashes=m.getJSONObject("sha256")

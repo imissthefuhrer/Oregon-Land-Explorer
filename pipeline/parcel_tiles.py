@@ -160,10 +160,18 @@ def validate_optimized(root, manifest):
         assert db.execute('PRAGMA integrity_check').fetchone()[0] == 'ok'
 
         keys = set(); exact = {}; total_cells = 0
+        attributes=None
+        if manifest.get('identity_strategy'):
+            attributes=json.loads((root/'source-metadata.json').read_text())['attribute_fingerprints']
         audit = json.loads((root/'source-record-hashes.json').read_text())
         for id, county, sid, key, props, geometry, record in db.execute('SELECT id,county,source_id,parcel_key,properties,geometry,audit FROM parcels'):
             f = {'geometry': json.loads(geometry), 'properties': json.loads(props)}
             assert county == COUNTY and str(id) == str(f['properties']['OBJECTID']) and sid == source_identity(f['properties'],manifest) and key == county + ':' + sid
+            if attributes is not None:
+                fields=['OBJECTID','TAXLOT','TAXACCT','ACRES','LASTUPDATE']
+                if manifest['source_namespace']=='marion-county-owner':fields.append('OWNERNAME')
+                source_attributes={k:f['properties'].get(k) for k in fields}
+                assert hashlib.sha256(json.dumps(source_attributes,sort_keys=True,separators=(',', ':')).encode()).hexdigest()==attributes[str(id)], ('source attribute mismatch',id)
             record = json.loads(record)
             assert record == audit[str(id)]
             assert fingerprint(f) == (record['display_sha256'] if isinstance(record, dict) else record)

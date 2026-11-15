@@ -109,7 +109,10 @@ object ParcelDatabase {
 
     /** Exact point-in-polygon on the audited display geometry. Holes and MultiPolygons retained. */
     fun contains(feature: Feature, lat: Double, lon: Double): Boolean {
-        val g=JSONObject(feature.geometry()!!.toJson()); val c=g.getJSONArray("coordinates")
+        return containsGeometry(JSONObject(feature.geometry()!!.toJson()),lat,lon)
+    }
+    fun containsGeometry(g: JSONObject, lat: Double, lon: Double): Boolean {
+        val c=g.getJSONArray("coordinates")
         fun ring(r: JSONArray): Int {
             var inside=false
             for(i in 0 until r.length()-1) {

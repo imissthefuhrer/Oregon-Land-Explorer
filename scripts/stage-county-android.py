@@ -13,7 +13,13 @@ for name in ['willamette-silver-outdoors','gervais-original-parcels']:
     shutil.copyfile(core/(name+'.olepack'),assets/'packs'/(name+'.olepack'))
 for file in core.glob('*.olepack'):shutil.copyfile(file,tests/'test-packs'/file.name)
 for file in county.glob('*.olepack'):shutil.copyfile(file,tests/'county-packs'/file.name)
-shutil.copyfile(county/'county-catalog.json',assets/'county-catalog.json')
+catalog=json.loads((county/'county-catalog.json').read_text())
+# Full-resolution coverage polygons stay in the downloadable GIS catalog. The
+# phone's package list needs only IDs, counts, source metadata and region bounds.
+catalog['packages']=[{k:v for k,v in p.items() if k!='coverage_geometry'} for p in catalog['packages']]
+catalog['county_bbox']=json.loads((county/'source-audit.json').read_text())['boundary_bbox']
+(assets/'county-catalog.json').write_text(json.dumps(catalog,separators=(',', ':')))
+shutil.copyfile(county/'county-boundary.json',assets/'county-boundary.json')
 with zipfile.ZipFile(core/'app-debug.apk') as z:
     for name in z.namelist():
         if name.startswith('assets/glyphs/') and not name.endswith('/'):

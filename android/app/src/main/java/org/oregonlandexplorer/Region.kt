@@ -21,6 +21,12 @@ class Region(private val context: Context) {
     val parcelLayerIds: List<String> get()=listOf("parcel-fill","parcel-line","selected-line")+parcelPackages.filter { it.tiled }.flatMap { listOf("parcel-fill-${it.id}","parcel-line-${it.id}") }
     private val base: MapPackage
     private val bases: List<MapPackage>
+    private val countyInfo by lazy {
+        runCatching { context.assets.open("county-catalog.json").bufferedReader().use { JSONObject(it.readText()) } }.getOrNull()
+    }
+    private val countyBoundary by lazy {
+        runCatching { context.assets.open("county-boundary.json").bufferedReader().use { JSONObject(it.readText()).getJSONArray("features").getJSONObject(0).getJSONObject("geometry") } }.getOrNull()
+    }
     init {
         store.installBundled()
         packages=store.installed()
@@ -82,7 +88,23 @@ class Region(private val context: Context) {
         return FeatureCollection.fromFeatures(unique.values.toList())
     }
     fun contains(latitude: Double,longitude: Double)=bases.any { it.contains(latitude,longitude) }
-    fun containsParcel(latitude: Double,longitude: Double)=parcelPackages.any { it.contains(latitude,longitude) }
+    fun containsParcel(latitude: Double,longitude: Double): Boolean {
+        if(parcelPackages.any { it.contains(latitude,longitude) }) return true
+        val metadata=countyInfo ?: return false
+        val catalog=metadata.getJSONArray("packages")
+        metadata.optJSONArray("county_bbox")?.let { b ->
+            if(longitude !in b.getDouble(0)..b.getDouble(2) || latitude !in b.getDouble(1)..b.getDouble(3)) return false
+        }
+        val ids=parcelPackages.map { it.id }.toSet()
+        val entries=(0 until catalog.length()).map { catalog.getJSONObject(it) }
+        val all=entries.isNotEmpty() && entries.all { it.getString("id") in ids }
+        val assigned=entries.any { e ->
+            val b=e.getJSONArray("partition_bbox")
+            e.getString("id") in ids && longitude in b.getDouble(0)..b.getDouble(2) && latitude in b.getDouble(1)..b.getDouble(3)
+        }
+        if(!all && !assigned) return false
+        return countyBoundary?.let { ParcelDatabase.containsGeometry(it,latitude,longitude) } ?: false
+    }
     fun containsAerial(latitude: Double,longitude: Double)=packages.any { it.enabled && it.kind in listOf("aerial","legacy") && it.contains(latitude,longitude) }
     fun style(aerial: Boolean=false): String {
         val style=JSONObject(styleTemplate)

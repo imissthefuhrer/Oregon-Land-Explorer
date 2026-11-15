@@ -23,6 +23,8 @@ def test_namespaced_identity_does_not_alias_legacy_objectid(tmp_path):
     assert source_identity({**p,'TAXLOT':'different'},manifest)!=key
     assert source_identity(p,{**manifest,'source_namespace':'marion-county-owner'})!=key
     (tmp_path/'source-record-hashes.json').write_text(json.dumps(audit))
+    fields=['OBJECTID','TAXLOT','TAXACCT','ACRES','LASTUPDATE']
+    (tmp_path/'source-metadata.json').write_text(json.dumps({'attribute_fingerprints':{'17':county.digest({k:p.get(k) for k in fields})}}))
     build_database(tmp_path/'parcels.sqlite',data,audit,manifest)
     build_tiles(tmp_path/'parcels.pmtiles',data,manifest)
     assert validate_optimized(tmp_path,manifest)['tile_identities']=='PASS'

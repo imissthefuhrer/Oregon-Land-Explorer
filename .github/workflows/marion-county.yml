@@ -1,11 +1,16 @@
 name: Full Marion County GIS
 on:
   workflow_dispatch:
+    inputs:
+      reuse_parcels_run:
+        description: Optional prior run with successful extraction and all six parcel shards (basemap-only retry/update)
+        required: false
   push:
     branches: [feat/marion-county-offline]
     paths: ['pipeline/county*.py', 'pipeline/parcel_tiles.py', '.github/workflows/marion-county.yml']
 permissions:
   contents: read
+  actions: read
 env:
   OLE_DATA_REVISION: ${{ github.run_number }}
 concurrency:
@@ -13,6 +18,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   extract:
+    if: ${{ !inputs.reuse_parcels_run }}
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
@@ -89,13 +95,25 @@ jobs:
           retention-days: 30
   delivery:
     needs: [extract, packages, basemap]
+    if: ${{ always() && needs.basemap.result == 'success' && (needs.packages.result == 'success' || inputs.reuse_parcels_run != '') }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
-        with: {pattern: 'marion-*', path: output/delivery, merge-multiple: true}
+        with:
+          pattern: marion-parcels-*
+          path: output/delivery
+          merge-multiple: true
+          run-id: ${{ inputs.reuse_parcels_run || github.run_id }}
+          github-token: ${{ github.token }}
       - uses: actions/download-artifact@v4
-        with: {name: county-open-data-checkpoints, path: work/extracted}
+        with: {name: marion-county-basemap, path: output/delivery}
+      - uses: actions/download-artifact@v4
+        with:
+          name: county-open-data-checkpoints
+          path: work/extracted
+          run-id: ${{ inputs.reuse_parcels_run || github.run_id }}
+          github-token: ${{ github.token }}
       - name: Reconcile delivery files and produce catalog and checksums
         run: python -m pipeline.county_delivery
       - uses: actions/upload-artifact@v4

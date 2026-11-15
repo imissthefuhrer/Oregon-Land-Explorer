@@ -25,7 +25,7 @@ from .packages import finish, sha
 def main():
     work=Path('work/county-vector');work.mkdir(parents=True,exist_ok=True)
     output=Path('output/county-basemap');root=output/'marion-outdoors';root.mkdir(parents=True,exist_ok=True)
-    boundary=request(BOUNDARY+'/query',where='1=1',outFields='NAME,STCOFIPS,LASTUPDATE',outSR=4326,returnGeometry='true',f='geojson')
+    boundary=request(BOUNDARY+'/query',where='1=1',outFields='OBJECTID,NAME,STCOFIPS,COUNTYAREA,LASTUPDATE',outSR=4326,returnGeometry='true',f='geojson')
     county=shape(boundary['features'][0]['geometry']);assert county.is_valid
     write(output/'county-boundary.json',boundary)
     w,s,e,n=county.bounds; bounds=[w-.025,s-.025,e+.025,n+.025]
@@ -34,7 +34,12 @@ def main():
     url='https://download.geofabrik.de/north-america/us/oregon-latest.osm.pbf'
     source=work/'oregon.osm.pbf'
     if not source.exists():
-        urllib.request.urlretrieve(url,work/'oregon.download');(work/'oregon.download').replace(source)
+        run('curl','-4','--fail','--location','--retry','4','--retry-all-errors','--connect-timeout','30','--max-time','600','--output',work/'oregon.download',url)
+        run('curl','-4','--fail','--location','--retry','4','--retry-all-errors','--connect-timeout','30','--max-time','120','--output',work/'oregon.md5',url+'.md5')
+        import hashlib
+        expected=(work/'oregon.md5').read_text().split()[0]
+        with (work/'oregon.download').open('rb') as downloaded: assert hashlib.file_digest(downloaded,'md5').hexdigest()==expected, 'Geofabrik bulk checksum mismatch; retry a consistent publication'
+        (work/'oregon.download').replace(source)
     with (work/'source-info.json').open('w') as f: subprocess.run(['osmium','fileinfo','-e','-j',str(source)],stdout=f,check=True)
     run('osmium','extract','-b',','.join(map(str,[bounds[0]-.04,bounds[1]-.04,bounds[2]+.04,bounds[3]+.04])),
         '-s','smart',source,'-o',work/'extract.osm.pbf','--overwrite')
@@ -64,6 +69,7 @@ def main():
                 for name,layer in mapbox_vector_tile.decode(gzip.decompress(blob)).items():
                     for feature in layer['features']:classes[name+':'+feature['properties'].get('class','')]+=1
     report.update(county_boundary_source=BOUNDARY,county_bbox=list(county.bounds),coverage_bbox=bounds,
+                  published_county_area_square_miles=boundary['features'][0]['properties']['COUNTYAREA'],
                   county_intersecting_tiles_verified=required,explicit_empty_tiles=empties,
                   maxzoom_feature_classes_with_edge_duplicates=dict(classes),
                   missing_roads_or_trails='OSM omissions are not comprehensively established. Target name audit included; mapped access tags do not establish legal access.')

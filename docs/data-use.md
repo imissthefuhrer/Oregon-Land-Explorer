@@ -2,6 +2,22 @@
 
 This is a small personal prototype, not permission for bulk redistribution.
 
+## County milestone rights gate — 2026-11-15
+
+The user confirmed there is no written countywide owner-data permission. The
+countywide public workflow never requests OWNERNAME or addresses. It uses the
+county-published **Open Data View**, whose catalog explicitly removes ownership
+and requires a written request for it:
+https://www.arcgis.com/home/item.html?id=9e496e9558ae476e9b65e1cf51b2594a
+The linked service advertises Query/Extract for public non-owner fields:
+https://services1.arcgis.com/sYGZnQPdJ0azuLyn/arcgis/rest/services/Parcels_OpenDataView/FeatureServer/0
+The county disclaimer and credits ship with these ownerless boundary packages.
+This does not establish rights to obtain or republish countywide owners from
+the owner-capable MapServer or older mirror. That production path stays gated
+for a private authorized hosted workflow. No countywide ownership database is
+published. See [marion-county.md](marion-county.md) for the precise separation,
+source comparison, private workflow and remaining permission blocker.
+
 ## OSIP 2024
 
 Oregon GEO states OSIP imagery is available for all to use:
