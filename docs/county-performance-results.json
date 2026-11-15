@@ -1,0 +1,365 @@
+{
+  "result": "PASS",
+  "county_parcels": 115870,
+  "county_packages": 16,
+  "import_all_ms": 74112,
+  "installed_payload_bytes_including_original_regions": 457071693,
+  "same_emulator_v032_both_regions_after_navigation_pss_mib": 101.74609375,
+  "same_emulator_v032_popup_median_ms": 855,
+  "historical_v032_both_regions_pss_mib": 127.1,
+  "county_scenarios": [
+    {
+      "scenario": "one-region",
+      "activity_ready_ms": 2556,
+      "pan_zoom_operations": 24,
+      "after_navigation_pss_mib": 93.62109375,
+      "sampled_pss_min_max_mib": [
+        91.01171875,
+        105.705078125
+      ],
+      "sampled_native_alloc_max_mib": 32.38801574707031,
+      "sampled_java_alloc_max_mib": 8.331756591796875,
+      "sampled_open_fd_min_max": [
+        190,
+        190
+      ],
+      "directory_cache_max_bytes": 562120,
+      "exact_selection_median_ms": 3,
+      "exact_selection_max_ms": 3,
+      "complete_frame_median_ms": 147,
+      "views": [
+        {
+          "place": "Salem",
+          "complete_frame_ms": 596,
+          "memory": {
+            "pss_kib": 108242,
+            "native_pss_kib": 38597,
+            "dalvik_pss_kib": 4213,
+            "java_alloc_bytes": 6102752,
+            "native_alloc_bytes": 32432048,
+            "open_file_descriptors": 190,
+            "directory_cache_bytes": 235890
+          }
+        },
+        {
+          "place": "Gervais",
+          "complete_frame_ms": 143,
+          "memory": {
+            "pss_kib": 93196,
+            "native_pss_kib": 23205,
+            "dalvik_pss_kib": 4561,
+            "java_alloc_bytes": 6639328,
+            "native_alloc_bytes": 26700320,
+            "open_file_descriptors": 190,
+            "directory_cache_bytes": 367066
+          }
+        },
+        {
+          "place": "Silverton",
+          "complete_frame_ms": 205,
+          "memory": {
+            "pss_kib": 95704,
+            "native_pss_kib": 25213,
+            "dalvik_pss_kib": 5057,
+            "java_alloc_bytes": 7233248,
+            "native_alloc_bytes": 30098688,
+            "open_file_descriptors": 190,
+            "directory_cache_bytes": 367066
+          }
+        },
+        {
+          "place": "Silver Falls",
+          "complete_frame_ms": 140,
+          "memory": {
+            "pss_kib": 93848,
+            "native_pss_kib": 23289,
+            "dalvik_pss_kib": 5121,
+            "java_alloc_bytes": 7376608,
+            "native_alloc_bytes": 26803872,
+            "open_file_descriptors": 190,
+            "directory_cache_bytes": 367066
+          }
+        },
+        {
+          "place": "Gates",
+          "complete_frame_ms": 147,
+          "memory": {
+            "pss_kib": 94316,
+            "native_pss_kib": 23205,
+            "dalvik_pss_kib": 5669,
+            "java_alloc_bytes": 8019680,
+            "native_alloc_bytes": 26919632,
+            "open_file_descriptors": 190,
+            "directory_cache_bytes": 498244
+          }
+        },
+        {
+          "place": "Detroit",
+          "complete_frame_ms": 186,
+          "memory": {
+            "pss_kib": 95236,
+            "native_pss_kib": 23673,
+            "dalvik_pss_kib": 6117,
+            "java_alloc_bytes": 8675040,
+            "native_alloc_bytes": 27462384,
+            "open_file_descriptors": 190,
+            "directory_cache_bytes": 562120
+          }
+        },
+        {
+          "place": "Eastern forest",
+          "complete_frame_ms": 98,
+          "memory": {
+            "pss_kib": 94532,
+            "native_pss_kib": 22949,
+            "dalvik_pss_kib": 6161,
+            "java_alloc_bytes": 8736480,
+            "native_alloc_bytes": 26190592,
+            "open_file_descriptors": 190,
+            "directory_cache_bytes": 562120
+          }
+        }
+      ]
+    },
+    {
+      "scenario": "all-regions",
+      "activity_ready_ms": 2675,
+      "pan_zoom_operations": 24,
+      "after_navigation_pss_mib": 112.4736328125,
+      "sampled_pss_min_max_mib": [
+        105.9814453125,
+        130.6181640625
+      ],
+      "sampled_native_alloc_max_mib": 33.24205017089844,
+      "sampled_java_alloc_max_mib": 27.761505126953125,
+      "sampled_open_fd_min_max": [
+        190,
+        190
+      ],
+      "directory_cache_max_bytes": 1128370,
+      "exact_selection_median_ms": 5,
+      "exact_selection_max_ms": 34,
+      "complete_frame_median_ms": 147,
+      "views": [
+        {
+          "place": "Salem",
+          "complete_frame_ms": 645,
+          "memory": {
+            "pss_kib": 125947,
+            "native_pss_kib": 45009,
+            "dalvik_pss_kib": 13625,
+            "java_alloc_bytes": 15802384,
+            "native_alloc_bytes": 34856816,
+            "open_file_descriptors": 190,
+            "directory_cache_bytes": 613728
+          }
+        },
+        {
+          "place": "Gervais",
+          "complete_frame_ms": 155,
+          "memory": {
+            "pss_kib": 109886,
+            "native_pss_kib": 28161,
+            "dalvik_pss_kib": 14425,
+            "java_alloc_bytes": 16896016,
+            "native_alloc_bytes": 29214144,
+            "open_file_descriptors": 190,
+            "directory_cache_bytes": 707396
+          }
+        },
+        {
+          "place": "Silverton",
+          "complete_frame_ms": 260,
+          "memory": {
+            "pss_kib": 111437,
+            "native_pss_kib": 28621,
+            "dalvik_pss_kib": 15517,
+            "java_alloc_bytes": 18165776,
+            "native_alloc_bytes": 33175008,
+            "open_file_descriptors": 190,
+            "directory_cache_bytes": 826642
+          }
+        },
+        {
+          "place": "Silver Falls",
+          "complete_frame_ms": 147,
+          "memory": {
+            "pss_kib": 108525,
+            "native_pss_kib": 25653,
+            "dalvik_pss_kib": 15573,
+            "java_alloc_bytes": 18280464,
+            "native_alloc_bytes": 28515200,
+            "open_file_descriptors": 190,
+            "directory_cache_bytes": 826642
+          }
+        },
+        {
+          "place": "Gates",
+          "complete_frame_ms": 133,
+          "memory": {
+            "pss_kib": 109229,
+            "native_pss_kib": 25809,
+            "dalvik_pss_kib": 16121,
+            "java_alloc_bytes": 18972688,
+            "native_alloc_bytes": 29128192,
+            "open_file_descriptors": 190,
+            "directory_cache_bytes": 900498
+          }
+        },
+        {
+          "place": "Detroit",
+          "complete_frame_ms": 139,
+          "memory": {
+            "pss_kib": 110397,
+            "native_pss_kib": 26609,
+            "dalvik_pss_kib": 16489,
+            "java_alloc_bytes": 19443728,
+            "native_alloc_bytes": 29496512,
+            "open_file_descriptors": 190,
+            "directory_cache_bytes": 900498
+          }
+        },
+        {
+          "place": "Eastern forest",
+          "complete_frame_ms": 141,
+          "memory": {
+            "pss_kib": 109061,
+            "native_pss_kib": 25257,
+            "dalvik_pss_kib": 16505,
+            "java_alloc_bytes": 19476496,
+            "native_alloc_bytes": 27595728,
+            "open_file_descriptors": 190,
+            "directory_cache_bytes": 900498
+          }
+        }
+      ]
+    },
+    {
+      "scenario": "overlapping-regions",
+      "activity_ready_ms": 2694,
+      "pan_zoom_operations": 600,
+      "after_navigation_pss_mib": 126.3447265625,
+      "sampled_pss_min_max_mib": [
+        106.9267578125,
+        133.9384765625
+      ],
+      "sampled_native_alloc_max_mib": 34.24266052246094,
+      "sampled_java_alloc_max_mib": 30.285614013671875,
+      "sampled_open_fd_min_max": [
+        191,
+        192
+      ],
+      "directory_cache_max_bytes": 1363350,
+      "exact_selection_median_ms": 5,
+      "exact_selection_max_ms": 58,
+      "complete_frame_median_ms": 171,
+      "views": [
+        {
+          "place": "Salem",
+          "complete_frame_ms": 580,
+          "memory": {
+            "pss_kib": 133305,
+            "native_pss_kib": 51097,
+            "dalvik_pss_kib": 12840,
+            "java_alloc_bytes": 14930400,
+            "native_alloc_bytes": 35281264,
+            "open_file_descriptors": 192,
+            "directory_cache_bytes": 1128370
+          }
+        },
+        {
+          "place": "Gervais",
+          "complete_frame_ms": 242,
+          "memory": {
+            "pss_kib": 113593,
+            "native_pss_kib": 30497,
+            "dalvik_pss_kib": 13724,
+            "java_alloc_bytes": 16163296,
+            "native_alloc_bytes": 31391760,
+            "open_file_descriptors": 192,
+            "directory_cache_bytes": 1247798
+          }
+        },
+        {
+          "place": "Silverton",
+          "complete_frame_ms": 218,
+          "memory": {
+            "pss_kib": 113201,
+            "native_pss_kib": 29633,
+            "dalvik_pss_kib": 14192,
+            "java_alloc_bytes": 16675296,
+            "native_alloc_bytes": 33807664,
+            "open_file_descriptors": 192,
+            "directory_cache_bytes": 1363350
+          }
+        },
+        {
+          "place": "Silver Falls",
+          "complete_frame_ms": 171,
+          "memory": {
+            "pss_kib": 110365,
+            "native_pss_kib": 26781,
+            "dalvik_pss_kib": 14208,
+            "java_alloc_bytes": 16675296,
+            "native_alloc_bytes": 29226016,
+            "open_file_descriptors": 192,
+            "directory_cache_bytes": 1363350
+          }
+        },
+        {
+          "place": "Gates",
+          "complete_frame_ms": 140,
+          "memory": {
+            "pss_kib": 110521,
+            "native_pss_kib": 26921,
+            "dalvik_pss_kib": 14224,
+            "java_alloc_bytes": 16708064,
+            "native_alloc_bytes": 29580560,
+            "open_file_descriptors": 192,
+            "directory_cache_bytes": 1363350
+          }
+        },
+        {
+          "place": "Detroit",
+          "complete_frame_ms": 133,
+          "memory": {
+            "pss_kib": 111045,
+            "native_pss_kib": 27425,
+            "dalvik_pss_kib": 14244,
+            "java_alloc_bytes": 16740832,
+            "native_alloc_bytes": 29929744,
+            "open_file_descriptors": 192,
+            "directory_cache_bytes": 1363350
+          }
+        },
+        {
+          "place": "Eastern forest",
+          "complete_frame_ms": 77,
+          "memory": {
+            "pss_kib": 109493,
+            "native_pss_kib": 25861,
+            "dalvik_pss_kib": 14256,
+            "java_alloc_bytes": 16740832,
+            "native_alloc_bytes": 28010464,
+            "open_file_descriptors": 192,
+            "directory_cache_bytes": 1363350
+          }
+        }
+      ]
+    }
+  ],
+  "cold_activity_total_ms": {
+    "county-before-import": [
+      934,
+      1174,
+      1100
+    ],
+    "county-installed": [
+      715,
+      1049,
+      782
+    ]
+  },
+  "limits": "API 35 Pixel 2 hosted emulator, Mesa software rendering; PSS includes instrumentation. Owner names withheld by official public download. Not physical phone performance.",
+  "sampling": "PSS sampled one second after views and every 12 navigation operations; transient peaks between samples are not measured. Complete-frame timings use the first fully rendered callback after the requested camera move. Exact selection timings include main-thread dispatch, not popup drawing."
+}

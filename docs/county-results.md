@@ -88,4 +88,64 @@ Actual parcel selection fixtures cover Salem, Gervais, Silverton, Silver Falls, 
 
 The separate corridor regression build passed compilation, lint, 20 GIS unit checks, six database/transport tests, the existing paired extended-navigation benchmark, and three UI regression tests. Its extended both-region result was 129.6 MiB PSS. The previous v0.3.2 handoff reported 127.1 MiB. Regression run: https://github.com/imissthefuhrer/Oregon-Land-Explorer/actions/runs/43694304777 .
 
-Final all-county measurements are pending the dedicated County Android verification run. The original v0.3.2 APK is archived unchanged under `verified-v0.3.2`; Android blocks ordinary APK downgrades and v0.3.2 cannot read the new namespaced county parcel databases. Do not uninstall an app containing your only installed data to attempt a rollback.
+Final all-county Android verification passed:
+https://github.com/imissthefuhrer/Oregon-Land-Explorer/actions/runs/43702289719 .
+The unchanged v0.3.2 APK was installed first, benchmarked, then updated in place
+with the same application ID and persistent signing identity. All installed data
+survived the upgrade.
+
+| Scenario | Settled PSS MiB | Sampled range MiB | Exact lookup median/max ms | Median complete frame ms |
+|---|---:|---:|---:|---:|
+| One region enabled (Detroit/eastern forest) | 93.6 | 91.0–105.7 | 3 / 3 | 147 |
+| All county regions enabled | 112.5 | 106.0–130.6 | 5 / 34 | 147 |
+| County plus overlapping original regions, 600 moves | 126.3 | 106.9–133.9 | 5 / 58 | 171 |
+
+The paired v0.3.2 both-region settled result was **101.7 MiB** in this run;
+county plus overlapping original regions added **24.6 MiB**. The previous v0.3.2
+handoff's **127.1 MiB** is a historical reference from a different run. Every
+sampled county view stayed below the 200 MiB target. Sampled native allocations
+peaked at 34.24 MiB, Java allocations at 30.29 MiB, and descriptors stayed at
+190–192. The directory cache peaked at 1,363,350 bytes within its unchanged global
+8 MiB limit. This evidence did not justify additional source-management complexity.
+
+County activity readiness was 2.56–2.69 seconds. Shell cold activity startup after
+county installation was 715/1049/782 ms; that metric excludes subsequent map
+readiness. Complete-frame timings use the per-frame SDK event, not the initial-map
+event. Exact lookup timings include dispatch to the main thread and exclude popup
+drawing. The baseline popup median was 855 ms; that is a different measurement.
+All-package validation/import took 74.1 seconds in the hosted emulator.
+
+Tests passed for every package's actual interior record and seven named place
+fixtures; all-source integrity; airplane mode with no INTERNET permission;
+14 GPS recenter checks; foreground/background and recreation; and update,
+rollback, removal and reimport without changing neighboring packages. Original
+single-document-picker, optional aerial, owner popup and GPS UI regressions also
+passed in the separate regression run cited above. Multiple-file import uses
+Android's standard OpenMultipleDocuments contract; the county stress test imports
+all package streams directly rather than automating a 17-file picker selection.
+
+The API 35 Pixel 2 emulator used Mesa software rendering. PSS includes
+instrumentation. Sampling occurred after views and every 12 navigation operations;
+transient peaks during imports, updates or between samples were not measured.
+Physical-phone verification of v0.4.0 remains outstanding. The production renderer,
+MapLibre version, range reader, cache limits and GPS code were preserved.
+
+Permanent delivery: https://github.com/imissthefuhrer/Oregon-Land-Explorer/releases/tag/marion-county-v0.4.0 .
+The APK is **56,206,284 bytes (53.60 MiB)**, SHA256
+`3696d6a1b35abfb6ea8c1a21dca818ffd22390f64f8405f0c472f0d3b9a5b5d0`.
+Only the original two small core packages and local fonts are embedded; county
+packages are separate. The full Maps/Reports convenience ZIP is 207,755,424 bytes
+(198.13 MiB), including the coverage atlas and metadata in addition to the 187.74
+MiB of individual map packages. Current map payloads including the original regions
+were 457,071,693 bytes (435.90 MiB), excluding SDK caches and other app files.
+
+Observed intermediate failures were corrected: ArcGIS long GET lists switched to
+supported form POST, valid empty vector tiles were distinguished from missing
+files, and a missing hosted dependency/fixture was staged correctly. Geofabrik
+routing failed and the provider was explicitly changed to official OSM France bulk
+data. Two benchmark assumptions were fixed: initial-map callbacks do not measure
+subsequent viewports, and a tap must follow camera idle and handle real overlapping
+records. The focused rendering diagnostic and final complete run passed after
+these test corrections. No failed validation was relabelled as a pass.
+
+ The original v0.3.2 APK is archived unchanged under `verified-v0.3.2`; Android blocks ordinary APK downgrades and v0.3.2 cannot read the new namespaced county parcel databases. Do not uninstall an app containing your only installed data to attempt a rollback.

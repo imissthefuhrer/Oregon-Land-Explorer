@@ -131,6 +131,7 @@ credentials or owner records into public commits, caches or Actions logs.
 
 ## Verification status
 
-Hosted results and measurements will be recorded after successful builds. Earlier
-v0.3.2 results are a comparison baseline, not proof of countywide performance.
+Full hosted results, source reconciliation, storage and measurements are in
+[county-results.md](county-results.md) and the permanent `marion-county-v0.4.0`
+release. Final all-county tests passed, including 600 moves and 14 GPS recenters.
 Physical-phone results for this new build must not be inferred from emulator tests.
