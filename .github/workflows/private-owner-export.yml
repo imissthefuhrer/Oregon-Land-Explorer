@@ -47,7 +47,14 @@ jobs:
         run: |
           mkdir -p private-data/input work/county-delivery
           if [ "$SYNTHETIC_ONLY" != true ]; then
-            gh release download "$INPUT_RELEASE" --pattern "$EXPORT_FILE" --pattern authorization.json --dir private-data/input
+            gh release download "$INPUT_RELEASE" --pattern authorization.json --dir private-data/input
+            python - <<'PY'
+          import json
+          from pathlib import Path
+          from pipeline.owners import check_authorization
+          check_authorization(json.loads(Path('private-data/input/authorization.json').read_text()))
+          PY
+            gh release download "$INPUT_RELEASE" --pattern "$EXPORT_FILE" --dir private-data/input
           fi
           gh release download marion-county-v0.4.0 --repo imissthefuhrer/Oregon-Land-Explorer --pattern '*.olepack' --pattern SHA256SUMS.txt --dir work/county-delivery
           python - <<'PY'

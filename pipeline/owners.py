@@ -163,6 +163,8 @@ def build(archives, export, metadata, output, revision=1, synthetic=False, table
         db.execute('INSERT INTO metadata VALUES (?,?)',('parcel_count',str(len(base_ids))))
     unmatched=[list(k) for k in grouped if k not in used]
     report={'result':'PASS','base_parcels':len(base_ids),'source_rows':input_count,'source_unique_keys':len(grouped),
+        'source_data_as_of':stamp,'source_age_days_at_build':(datetime.now(timezone.utc)-date(stamp)).days,
+        'freshness_limit':'Matching cannot detect ownership transfers after the documented owner-source snapshot. Parcel LASTUPDATE is a GIS maintenance timestamp, not proof of the last ownership transfer.',
         'identical_duplicate_rows':input_count-sum(len(v) for v in grouped.values()),'status_counts':dict(counts),
         'unmatched_source_keys':len(unmatched),'associations_sha256':fingerprint(associations),
         'policy':'Exact county/TAXLOT/TAXACCT only. Conflicting, null, stale or changed records never populate OWNERNAME. OBJECTID is never a cross-source key.',

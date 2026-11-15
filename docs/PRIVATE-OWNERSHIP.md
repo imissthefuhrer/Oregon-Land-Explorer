@@ -14,6 +14,9 @@ credits Marion County assessor/GIS; publisher is `ikintz_cityofstayton`.
 The published license text is an accuracy/use disclaimer, not an explicit grant
 for countywide private bulk acquisition. Public API accessibility alone does not
 resolve that question. No new countywide OWNERNAME extraction was performed.
+No explicit ban on personal offline use was found in that mirror item's terms
+either. The uncertainty is the authorized countywide acquisition method and
+conditions, rather than a finding that private owner identification is forbidden.
 
 The official [county parcel service](https://gis.co.marion.or.us/arcgis/rest/services/Public/Parcels/MapServer/0)
 also exposes OWNERNAME. The sanctioned
@@ -125,6 +128,10 @@ The raw export is converted in private hosted CI; the phone imports the resultin
 `.olepack`, not a raw CSV. Private artifacts expire after seven days; retain your
 authorized input/output privately as its terms permit. GitHub access controls protect
 downloads; this is not additional database encryption on an unlocked phone.
+The prepared private repository is
+[Oregon-Land-Explorer-Private-Data](https://github.com/imissthefuhrer/Oregon-Land-Explorer-Private-Data).
+Its optional `synthetic_smoke_test` mode generates visibly invented names and
+requires no ownership input. Keep that option off when preparing authorized data.
 
 ## Matching, updates and integrity
 
@@ -135,6 +142,8 @@ Identical duplicates are counted; distinct rows with the same identity conflict 
 never assign an owner. Unmatched export keys are reported separately. Names are
 as-of statements; successful matching cannot independently prove a sale has not
 occurred after the source snapshot.
+Reports retain source snapshot age. LASTUPDATE is the GIS maintenance date;
+it does not independently prove the date of the last ownership transfer.
 
 An ownership row binds to SHA256 of the exact base polygon. Changed installed
 geometry or a parcel LASTUPDATE newer than the owner record blocks presenting the
