@@ -52,6 +52,8 @@ object OwnerDatabase {
     fun enrich(feature: Feature,packages: List<MapPackage>) {
         val key=feature.getProperty("parcel_key")?.asString ?: return
         if(!key.startsWith("41047:marion-open:")) return // preserve original source ownership
+        // Never retain a previous lookup's name if identity or installed packages changed.
+        for(name in listOf("OWNERNAME","REPORTED_OWNERNAME","owner_source","owner_data_as_of","owner_data_status","owner_match_status")) feature.removeProperty(name)
         val lot=feature.getProperty("TAXLOT")?.takeUnless { it.isJsonNull }?.asString?.trim() ?: return
         val account=feature.getProperty("TAXACCT")?.takeUnless { it.isJsonNull }?.asString?.trim() ?: return
         for(pack in packages.sortedWith(compareByDescending<MapPackage> { java.time.Instant.parse(it.manifest.getString("source_data_as_of")) }.thenByDescending { it.manifest.getInt("revision") }.thenBy { it.id })) {
