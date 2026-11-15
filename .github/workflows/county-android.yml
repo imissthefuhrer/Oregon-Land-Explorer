@@ -8,12 +8,19 @@ on:
       gis_run:
         description: Successful Full Marion County GIS run ID
         required: true
+      publish_existing_apk_run:
+        description: Optional successful County Android run to publish instead of rebuilding
+        required: false
+      source_audit_run:
+        description: Non-owner inventory comparison run for release evidence
+        default: '43694060470'
+        required: false
 permissions:
   contents: read
   actions: read
 jobs:
   verify:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && !inputs.publish_existing_apk_run
     runs-on: ubuntu-24.04
     timeout-minutes: 75
     steps:
@@ -103,3 +110,19 @@ jobs:
             output/emulator-screenshots/
             android/app/build/reports/
           retention-days: 30
+  publish:
+    if: github.event_name == 'workflow_dispatch' && inputs.publish_existing_apk_run != ''
+    runs-on: ubuntu-24.04
+    permissions: {contents: write, actions: read}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: python -m pip install -r pipeline/requirements.txt
+      - name: Retrieve successful verified builds only
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COUNTY_GIS_RUN: ${{ inputs.gis_run }}
+          COUNTY_APK_RUN: ${{ inputs.publish_existing_apk_run }}
+          COUNTY_AUDIT_RUN: ${{ inputs.source_audit_run }}
+        run: python scripts/publish-county.py
