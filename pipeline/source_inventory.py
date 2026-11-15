@@ -7,7 +7,9 @@ from .county import request, ids, write, digest, OPEN, COUNTY, MIRROR
 
 
 def inventory(source):
-    wanted=ids(source);stamp=request(source).get('editingInfo')
+    wanted=ids(source);metadata=request(source);stamp=metadata.get('editingInfo')
+    geographic=request(source+'/query',where='1=1',returnExtentOnly='true',outSR=4326)['extent']
+    assert geographic['spatialReference'].get('latestWkid',geographic['spatialReference']['wkid'])==4326
     def batch(offset):
         part=wanted[offset:offset+500]
         result=request(source+'/query',objectIds=','.join(map(str,part)),returnGeometry='false',
@@ -23,7 +25,11 @@ def inventory(source):
     for r in rows: grouped[(r.get('TAXLOT'),r.get('TAXACCT'))].append(r)
     duplicates=[{'taxlot':k[0],'taxacct':k[1],'source_ids':[r['OBJECTID'] for r in v]} for k,v in grouped.items() if len(v)>1]
     missing=[r['OBJECTID'] for r in rows if not r.get('TAXLOT') or not r.get('TAXACCT')]
+    dates=[r['LASTUPDATE'] for r in rows if r.get('LASTUPDATE') is not None]
     return grouped,{'url':source,'count':len(rows),'source_editing_info':stamp,'unique_taxlot_accounts':len(grouped),
+                    'published_extent':metadata['extent'],'query_extent_wgs84':geographic,
+                    'record_lastupdate_min_max_epoch_ms':[min(dates),max(dates)] if dates else None,
+                    'record_lastupdate_null_count':len(rows)-len(dates),
                     'duplicate_taxlot_accounts':duplicates,'missing_stable_field_ids':missing,'attributes_sha256':digest(sorted(rows,key=lambda r:r['OBJECTID']))}
 
 
