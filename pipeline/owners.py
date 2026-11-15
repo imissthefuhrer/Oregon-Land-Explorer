@@ -149,8 +149,11 @@ def build(archives, export, metadata, output, revision=1, synthetic=False, table
             elif len(candidates)>1:status='conflict';note=f'{len(candidates)} conflicting source records; no owner assigned'
             else:
                 record=candidates[0];reported=record['OWNERNAME'];asof=record['OWNER_AS_OF'];status='matched'
+                try:parcel_updated=date(p['LASTUPDATE']) if p.get('LASTUPDATE') else None
+                except (ValueError,TypeError,OverflowError):parcel_updated=None
                 if not reported:status='null';note='Source owner name is null or withheld'
-                elif p.get('LASTUPDATE') and date(asof)<date(p['LASTUPDATE']):status='stale';note='Owner record predates the parcel LASTUPDATE; verify before relying on it'
+                elif parcel_updated is None:status='stale';note='Parcel update date is missing or invalid; the reported owner cannot be validated against this snapshot'
+                elif date(asof)<parcel_updated:status='stale';note='Owner record predates the parcel LASTUPDATE; verify before relying on it'
                 elif record['ACRES'] is not None and p.get('ACRES') is not None and abs(record['ACRES']-p['ACRES'])>1e-8:
                     status='parcel_changed';note='Acreage differs from the matched parcel snapshot'
                 else:owner=reported
@@ -169,6 +172,7 @@ def build(archives, export, metadata, output, revision=1, synthetic=False, table
         'unmatched_source_keys':len(unmatched),'associations_sha256':fingerprint(associations),
         'policy':'Exact county/TAXLOT/TAXACCT only. Conflicting, null, stale or changed records never populate OWNERNAME. OBJECTID is never a cross-source key.',
         'test_data':synthetic,'all_base_records_accounted_for':sum(counts.values())==len(base_ids),
+        'ownership_coverage_result':'COMPLETE' if counts['matched']==len(base_ids) else 'PARTIAL',
         'base_packages':{Path(p).name:sha(p) for p in sorted(map(Path,archives))},
         'base_geometry_policy':'Unmodified. Attribute-only overlay binds each association to its exact installed polygon SHA256.'}
     (root/'owner-validation.json').write_text(json.dumps(report,indent=2))

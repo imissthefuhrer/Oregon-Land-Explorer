@@ -8,12 +8,13 @@ from pipeline import owners
 from pipeline.packages import finish, sha
 
 
-def fixture(tmp_path, count=8):
+def fixture(tmp_path, count=9):
     root=tmp_path/'base';root.mkdir()
     with sqlite3.connect(root/'parcels.sqlite') as db:
         db.execute('CREATE TABLE parcels(parcel_key TEXT,properties TEXT,geometry TEXT)')
         for n in range(count):
             p={'OBJECTID':n+100,'TAXLOT':f'000{n}','TAXACCT':f'00R{n}','ACRES':1.0,'LASTUPDATE':1754006400000}
+            if n==8:p['LASTUPDATE']=None
             db.execute('INSERT INTO parcels VALUES (?,?,?)',(f'41047:marion-open:test{n}',json.dumps(p),'same exact synthetic geometry '+str(n)))
     finish(root,{'id':'base','name':'Synthetic base','bbox':[-123,44.9,-122,45.1]},'parcels',source_namespace='marion-open')
     with zipfile.ZipFile(root.with_suffix('.olepack')) as z:payload={n:z.read(n) for n in z.namelist()}
@@ -41,7 +42,8 @@ def test_every_association_reconciled_without_objectid_join(tmp_path):
     before=sha(base[0]);out=tmp_path/'out'
     report=owners.build(base,export,metadata,out,synthetic=True)
     assert sha(base[0])==before
-    assert report['status_counts']=={'matched':3,'null':1,'stale':1,'parcel_changed':1,'conflict':1,'missing':1}
+    assert report['status_counts']=={'matched':3,'null':1,'stale':2,'parcel_changed':1,'conflict':1,'missing':1}
+    assert report['ownership_coverage_result']=='PARTIAL'
     assert report['unmatched_source_keys']==1 and report['identical_duplicate_rows']==1
     assert report['all_base_records_accounted_for']
     with sqlite3.connect(out/'marion-private-owners/owners.sqlite') as db:
