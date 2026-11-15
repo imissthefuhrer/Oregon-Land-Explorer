@@ -11,6 +11,7 @@ their real names. New full-county owner tests use visibly synthetic names only.
 - [PR #8](https://github.com/imissthefuhrer/Oregon-Land-Explorer/pull/8), based on PR #7 head `10d42ac`
 - [Full ownership Android verification](https://github.com/imissthefuhrer/Oregon-Land-Explorer/actions/runs/43739873375), APK source `e473af0`
 - [Focused local selection/owner timing](https://github.com/imissthefuhrer/Oregon-Land-Explorer/actions/runs/43741865919), same production Android sources; added instrumentation only
+- [Full existing Android/GIS regression and legacy comparison](https://github.com/imissthefuhrer/Oregon-Land-Explorer/actions/runs/43740098641), passed compilation/lint, 24 GIS tests, six database/tile tests, both legacy/optimized benchmark executions and three UI tests
 - [Private workflow and acquisition instructions](PRIVATE-OWNERSHIP.md)
 - [Unchanged phone-tested v0.3.2 fallback](https://github.com/imissthefuhrer/Oregon-Land-Explorer/releases/tag/verified-v0.3.2)
 
