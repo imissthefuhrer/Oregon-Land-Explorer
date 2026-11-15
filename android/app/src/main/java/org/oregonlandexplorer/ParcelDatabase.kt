@@ -90,7 +90,10 @@ object ParcelDatabase {
 
     fun lookup(pack: MapPackage, key: String): Feature? = open(pack.parcelFile).use { db ->
         db.rawQuery("SELECT $COLUMNS FROM parcels p WHERE p.parcel_key=?",arrayOf(key)).use { c ->
-            if(c.moveToFirst()) feature(c.getString(0),c.getString(1),c.getString(2)) else null
+            if(c.moveToFirst()) feature(c.getString(0),c.getString(1),c.getString(2)).also { f ->
+                val digest=java.security.MessageDigest.getInstance("SHA-256").digest(c.getString(2).toByteArray(Charsets.UTF_8))
+                f.addStringProperty("owner_geometry_binding",digest.joinToString("") { "%02x".format(it) })
+            } else null
         }
     }
 

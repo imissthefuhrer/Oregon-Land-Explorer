@@ -234,7 +234,9 @@ class MainActivity : AppCompatActivity(), LocationListener {
         map?.style?.getSourceAs<GeoJsonSource>("selection")?.setGeoJson(feature)
         val repair=feature.getProperty("geometry_repair_note")?.takeUnless { it.isJsonNull }?.asString?.let { "\n\n$it" } ?: ""
         val ownerNote=if(feature.hasProperty("owner_data_status")) "\n${value(feature,"owner_data_status")}" else ""
-        sheet("Property details", "Owner: ${value(feature,"OWNERNAME")}$ownerNote\n\nTax lot: ${value(feature,"TAXLOT")}\nAcres: ${value(feature,"ACRES")}\n\nOwnership classification: Unknown\nLegal public access: Unknown\n\nMarion County assessor-derived record. Boundaries are approximate, not a survey. Ownership does not establish permission to enter.\n\nSource extract: ${value(feature,"source_extracted_at")}\nRegion: ${value(feature,"source_package")}$repair")
+        val reported=if(feature.hasProperty("REPORTED_OWNERNAME")) "\nReported historical/unverified name: ${value(feature,"REPORTED_OWNERNAME")}" else ""
+        val ownerSource=if(feature.hasProperty("owner_source")) "\nOwnership source: ${value(feature,"owner_source")}" else ""
+        sheet("Property details", "Owner: ${value(feature,"OWNERNAME")}$ownerNote$reported$ownerSource\n\nTax lot: ${value(feature,"TAXLOT")}\nAccount: ${value(feature,"TAXACCT")}\nAcres: ${value(feature,"ACRES")}\n\nOwnership classification: Unknown\nLegal public access: Unknown\n\nMarion County assessor-derived record. Boundaries are approximate, not a survey. Ownership does not establish permission to enter.\n\nSource extract: ${value(feature,"source_extracted_at")}\nRegion: ${value(feature,"source_package")}$repair")
     }
     private fun sheet(title: String, body: String) {
         val dialog = BottomSheetDialog(this)
@@ -287,7 +289,8 @@ class MainActivity : AppCompatActivity(), LocationListener {
             "$state: ${entry.getString("name")}\n${entry.getInt("parcel_count")} records · ${entry.getJSONArray("partition_bbox")}"
         }
         val base=installed.packages.firstOrNull { it.id=="marion-outdoors" }
-        sheet("County coverage","County basemap: ${if(base==null) "Missing" else if(base.enabled) "Installed, enabled" else "Installed, disabled"}\n\n${lines.joinToString("\n\n")}\n\nThese county packages contain public parcel boundaries. Owner names are withheld by the county public download service. Missing data does not mean land has no owner. Existing owner-enabled packages are retained.\n\nOptional: original Gervais OSIP 2024 aerial. Import browser downloads using Region > Import .olepack from Downloads. Long-press a file in Android Files to select multiple packages. Each file is validated and installed independently.")
+        val owners=installed.packages.filter { it.kind=="owners" }.joinToString("\n") { "${if(it.enabled) "Enabled" else "Disabled"}: ${it.manifest.getString("name")} · ${it.manifest.getInt("owner_count")} validated names · as of ${it.manifest.getString("source_data_as_of")}" }.ifEmpty { "Private county ownership dataset not installed" }
+        sheet("County coverage","County basemap: ${if(base==null) "Missing" else if(base.enabled) "Installed, enabled" else "Installed, disabled"}\n\nOwnership information:\n$owners\n\n${lines.joinToString("\n\n")}\n\nPublic boundary packages exclude owner names. Import a separate authorized private ownership .olepack to identify owners offline. Missing data does not mean land has no owner. Existing owner-enabled packages are retained.\n\nOptional: original Gervais OSIP 2024 aerial. Import browser downloads using Region > Import .olepack from Downloads. Long-press a file in Android Files to select multiple packages. Each file is validated and installed independently.")
     }
     private fun go(lat: Double,lon: Double,zoom: Double) { map?.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(lat,lon),zoom)) }
     private fun managePackages() {

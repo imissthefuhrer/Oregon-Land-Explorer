@@ -1,0 +1,23 @@
+name: Publish verified ownership-capable APK
+on:
+  push:
+    branches: [feat/private-offline-owners]
+    paths: ['.github/workflows/owner-publish.yml']
+  workflow_dispatch:
+    inputs:
+      verified_run:
+        description: Successful Private ownership Android verification run ID
+        required: true
+permissions: {contents: read}
+jobs:
+  publish:
+    if: github.event_name == 'workflow_dispatch' && github.repository == 'imissthefuhrer/Oregon-Land-Explorer'
+    runs-on: ubuntu-24.04
+    permissions: {contents: write, actions: read}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Retrieve successful tested APK and non-owner test evidence
+        env: {GH_TOKEN: '${{ github.token }}', VERIFIED_RUN: '${{ inputs.verified_run }}'}
+        run: python scripts/publish-owners.py

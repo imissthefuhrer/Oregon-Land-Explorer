@@ -12,6 +12,7 @@ class Region(private val context: Context) {
     val packages: List<MapPackage>
     val manifest: JSONObject
     val parcelPackages: List<MapPackage>
+    val ownerPackages: List<MapPackage>
     val previousPackageIds: Set<String>
     private val localSources=HashMap<Pair<String,String>,String>()
     val localTileKeys: Set<String> get()=localSources.values.toSet()
@@ -44,6 +45,7 @@ class Region(private val context: Context) {
         } }
         base=bases.firstOrNull() ?: error("Enable an installed vector basemap")
         parcelPackages=active.filter { it.kind in listOf("parcels","legacy") }
+        ownerPackages=active.filter { it.kind=="owners" }
         for(pack in active) {
             val names=when(pack.kind) {
                 "vector" -> listOf("basemap.pmtiles")
@@ -72,6 +74,7 @@ class Region(private val context: Context) {
                 require(selectedBytes<=8*1024*1024) { "Selected overlapping parcels exceed the detail budget; inspect source data" }
                 feature.addStringProperty("source_extracted_at",pack.manifest.getString("extracted_at"))
                 feature.addStringProperty("source_package",pack.manifest.getString("name"))
+                OwnerDatabase.enrich(feature,ownerPackages)
                 feature
             }
         }

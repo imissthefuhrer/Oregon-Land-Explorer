@@ -7,6 +7,6 @@ adb shell svc data disable
 bash scripts/benchmark-parcels.sh
 adb shell mkdir -p /sdcard/Download/ole-evidence
 trap 'adb logcat -d -b crash > output/emulator-crashes.txt || true; adb pull /sdcard/Download/ole-evidence/. output/emulator-screenshots/ || true' EXIT
-gradle -p android --no-daemon :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.notClass=org.oregonlandexplorer.ParcelPerformanceTest,org.oregonlandexplorer.ParcelDatabaseTest,org.oregonlandexplorer.LocalTilesTest,org.oregonlandexplorer.CountyPerformanceTest,org.oregonlandexplorer.CountyRenderDiagnosticTest
+gradle -p android --no-daemon :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.notClass=org.oregonlandexplorer.ParcelPerformanceTest,org.oregonlandexplorer.ParcelDatabaseTest,org.oregonlandexplorer.LocalTilesTest,org.oregonlandexplorer.CountyPerformanceTest,org.oregonlandexplorer.CountyRenderDiagnosticTest,org.oregonlandexplorer.OwnerWorkflowTest,org.oregonlandexplorer.OwnerRegressionSetupTest,org.oregonlandexplorer.OwnerLookupBenchmarkTest
 adb pull /sdcard/Download/ole-evidence/. output/emulator-screenshots/
 python scripts/summarize-parcel-performance.py
