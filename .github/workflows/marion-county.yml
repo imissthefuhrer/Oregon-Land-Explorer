@@ -7,7 +7,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: county-gis-${{ github.ref }}
+  group: county-gis-${{ github.ref }}-${{ github.sha }}
   cancel-in-progress: false
 jobs:
   extract:
