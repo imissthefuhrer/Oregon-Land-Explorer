@@ -1,0 +1,97 @@
+name: County Android verification
+on:
+  push:
+    branches: [feat/marion-county-offline]
+    paths: ['.github/workflows/county-android.yml']
+  workflow_dispatch:
+    inputs:
+      gis_run:
+        description: Successful Full Marion County GIS run ID
+        required: true
+permissions:
+  contents: read
+  actions: read
+jobs:
+  verify:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: python -m pip install -r pipeline/requirements.txt
+      - name: GIS unit tests
+        run: python -m pytest -q --junitxml=output/county-gis-tests.xml
+      - name: Retrieve validated county delivery and unchanged v0.3.2
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p work/v032 work/county-delivery
+          gh release download verified-v0.3.2 --dir work/v032
+          echo '65ba81dfab48ca6a99e6ff61037948abc3bfeac99e3d5cc258f4c6d696c21153  work/v032/app-debug.apk' | sha256sum -c
+          gh run download ${{ inputs.gis_run }} --name marion-county-offline-maps --dir work/county-delivery
+          cd work/county-delivery && sha256sum -c SHA256SUMS.txt
+      - name: Stage exact tested core assets and external county instrumentation fixtures
+        run: |
+          python scripts/stage-county-android.py
+          python -m pipeline.tile_fixtures
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '17'}
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools platforms;android-35 build-tools;35.0.0
+          log-accepted-android-sdk-licenses: false
+      - uses: gradle/actions/setup-gradle@v4
+        with: {gradle-version: '8.11.1'}
+      - name: Restore persistent signing identity
+        env:
+          OLE_SIGNING_KEY: ${{ secrets.OLE_SIGNING_KEY }}
+        run: |
+          test -n "$OLE_SIGNING_KEY"
+          echo "$OLE_SIGNING_KEY" | base64 --decode > "$RUNNER_TEMP/ole-signing.p12"
+      - name: Build signed app, instrumentation, lint and unit checks
+        env:
+          OLE_KEYSTORE: ${{ runner.temp }}/ole-signing.p12
+          OLE_STORE_PASSWORD: ${{ secrets.OLE_STORE_PASSWORD }}
+        run: gradle -p android --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug :app:testDebugUnitTest
+      - name: Verify exact APK permissions, glyphs and embedded packages
+        run: python scripts/check-apk.py android/app/build/outputs/apk/debug/app-debug.apk
+      - name: Prepare faithful Mesa rendering and KVM
+        run: |
+          sudo apt-get install -y xvfb libgl1-mesa-dri libegl1 mesa-utils
+          Xvfb :99 -screen 0 1280x1024x24 > /tmp/ole-xvfb.log 2>&1 &
+          echo 'DISPLAY=:99' >> "$GITHUB_ENV"
+          echo 'LIBGL_ALWAYS_SOFTWARE=1' >> "$GITHUB_ENV"
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: In-place v0.3.2 upgrade, full county stress and airplane-mode tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: default
+          profile: pixel_2
+          disable-animations: true
+          emulator-options: -no-window -gpu host -feature -Vulkan -noaudio -no-boot-anim -camera-back none
+          script: bash scripts/test-county-device.sh
+      - name: Prepare phone APK download after successful device checks
+        run: |
+          mkdir -p output/county-app
+          cp android/app/build/outputs/apk/debug/app-debug.apk output/county-app/oregon-land-explorer-v0.4.0.apk
+          cp output/apk-validation.json work/county-delivery/INSTALL.txt output/county-app/
+          cd output/county-app && sha256sum *.apk > SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with: {name: oregon-land-explorer-county-apk, path: output/county-app/, retention-days: 30}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: county-android-test-evidence
+          path: |
+            output/*.xml
+            output/*.json
+            output/*.txt
+            output/emulator-screenshots/
+            android/app/build/reports/
+          retention-days: 30
