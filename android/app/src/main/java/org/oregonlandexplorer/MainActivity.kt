@@ -54,8 +54,8 @@ class MainActivity : AppCompatActivity(), LocationListener {
     @Volatile var mapReadyMs=0L
     private val launchedAt=android.os.SystemClock.elapsedRealtime()
     private var destroyed=false
-    private val importer = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
-        if(uri!=null) importDocument(uri)
+    private val importer = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris: List<Uri> ->
+        if(uris.isNotEmpty()) importDocuments(uris)
     }
     private var fix: Location? = null
     private var recenterOnFix = false
@@ -232,7 +232,8 @@ class MainActivity : AppCompatActivity(), LocationListener {
     private fun showParcel(feature: Feature) {
         map?.style?.getSourceAs<GeoJsonSource>("selection")?.setGeoJson(feature)
         val repair=feature.getProperty("geometry_repair_note")?.takeUnless { it.isJsonNull }?.asString?.let { "\n\n$it" } ?: ""
-        sheet("Property details", "Owner: ${value(feature,"OWNERNAME")}\n\nTax lot: ${value(feature,"TAXLOT")}\nAcres: ${value(feature,"ACRES")}\n\nOwnership classification: Unknown\nLegal public access: Unknown\n\nMarion County assessor-derived record. Boundaries are approximate, not a survey. Ownership does not establish permission to enter.\n\nSource extract: ${value(feature,"source_extracted_at")}\nRegion: ${value(feature,"source_package")}$repair")
+        val ownerNote=if(feature.hasProperty("owner_data_status")) "\n${value(feature,"owner_data_status")}" else ""
+        sheet("Property details", "Owner: ${value(feature,"OWNERNAME")}$ownerNote\n\nTax lot: ${value(feature,"TAXLOT")}\nAcres: ${value(feature,"ACRES")}\n\nOwnership classification: Unknown\nLegal public access: Unknown\n\nMarion County assessor-derived record. Boundaries are approximate, not a survey. Ownership does not establish permission to enter.\n\nSource extract: ${value(feature,"source_extracted_at")}\nRegion: ${value(feature,"source_package")}$repair")
     }
     private fun sheet(title: String, body: String) {
         val dialog = BottomSheetDialog(this)
@@ -252,7 +253,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
         sheet("Installed map data", "$records\n\n${installed.manifest.getInt("parcel_count")} installed parcel records (overlap resolved on selection).\n\n© OpenStreetMap contributors. Open data under ODbL 1.0: https://www.openstreetmap.org/copyright · https://opendatacommons.org/licenses/odbl/1-0/\nOutdoor data: Geofabrik Oregon extract, compiled with Tilemaker. Fonts: Noto Sans (SIL OFL 1.1). MapLibre Native (BSD-2-Clause).\n\nRoads are light; trails are rust dashes; forest tracks are brown dashes; mapped access=no/private is overprinted purple. These tags are not proof of access. Confirm restrictions and current closures locally.\n\nParcel source: https://services3.arcgis.com/SXXjryU22GsO8OEC/arcgis/rest/services/Parcels/FeatureServer/0\nApproximate assessor-derived boundaries, not surveys; source vintage and completeness are not independently verified. Ownership and legal public access remain Unknown.\n\nAll map data, labels and fonts are local. No internet permission. Vector geometry is stored through zoom 15 and magnified above it; aerial through zoom 17. Home coverage must be checked privately using GPS.")
     }
     private fun showRegions() {
-        val items=arrayOf("Return to corridor", "Gervais countryside", "St. Louis Ponds", "Willamette Mission State Park", "Silver Falls State Park", "Import .olepack from Downloads", "Manage installed packages", if(aerialVisible) "Use outdoor basemap" else "Show installed optional aerial")
+        val items=arrayOf("Return to downloaded basemap", "Gervais countryside", "St. Louis Ponds", "Willamette Mission State Park", "Silver Falls State Park", "Import .olepack from Downloads", "Manage installed packages", if(aerialVisible) "Use outdoor basemap" else "Show installed optional aerial", "County coverage", "Salem", "Gates", "Detroit")
         androidx.appcompat.app.AlertDialog.Builder(this).setTitle("Offline regions").setItems(items) { _, choice ->
             when(choice) {
                 0 -> home()
@@ -267,8 +268,25 @@ class MainActivity : AppCompatActivity(), LocationListener {
                         sheet("Optional aerial", "Download and import gervais-original-aerial.olepack, then select this option. Outdoor coverage remains available outside installed aerial regions.")
                     } else { aerialVisible=!aerialVisible; region?.let { loadMap(it,false) } }
                 }
+                8 -> showCountyCoverage()
+                9 -> go(44.942,-123.035,15.0)
+                10 -> go(44.755,-122.416,15.0)
+                11 -> go(44.735,-122.151,15.0)
             }
         }.show()
+    }
+    private fun showCountyCoverage() {
+        val installed=region ?: return
+        val catalog=runCatching { assets.open("county-catalog.json").bufferedReader().use { JSONObject(it.readText()) } }.getOrNull()
+        if(catalog==null) { sheet("County coverage","County catalog is unavailable in this build. Installed packages remain listed under Manage installed packages.");return }
+        val entries=catalog.getJSONArray("packages")
+        val lines=(0 until entries.length()).map { i ->
+            val entry=entries.getJSONObject(i);val pack=installed.packages.firstOrNull { it.id==entry.getString("id") }
+            val state=when { pack==null -> "Missing";!pack.enabled -> "Installed, disabled";else -> "Installed, enabled" }
+            "$state: ${entry.getString("name")}\n${entry.getInt("parcel_count")} records · ${entry.getJSONArray("partition_bbox")}"
+        }
+        val base=installed.packages.firstOrNull { it.id=="marion-outdoors" }
+        sheet("County coverage","County basemap: ${if(base==null) "Missing" else if(base.enabled) "Installed, enabled" else "Installed, disabled"}\n\n${lines.joinToString("\n\n")}\n\nThese county packages contain public parcel boundaries. Owner names are withheld by the county public download service. Missing data does not mean land has no owner. Existing owner-enabled packages are retained.\n\nOptional: original Gervais OSIP 2024 aerial. Import browser downloads using Region > Import .olepack from Downloads. Long-press a file in Android Files to select multiple packages. Each file is validated and installed independently.")
     }
     private fun go(lat: Double,lon: Double,zoom: Double) { map?.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(lat,lon),zoom)) }
     private fun managePackages() {
@@ -309,10 +327,20 @@ class MainActivity : AppCompatActivity(), LocationListener {
             }
         }.start()
     }
-    private fun importDocument(uri: Uri) {
+    private fun importDocuments(uris: List<Uri>) {
         reloadPackages {
             val store=region?.store ?: PackageStore(this)
-            contentResolver.openInputStream(uri)?.use { store.importPackage(it) } ?: error("Cannot open selected document")
+            var completed=0;val failures=mutableListOf<String>()
+            for(uri in uris) {
+                try {
+                    contentResolver.openInputStream(uri)?.use { store.importPackage(it) } ?: error("Cannot open selected document")
+                    completed++
+                } catch(e: Exception) { failures.add("${uri.lastPathSegment}: ${e.message}") }
+            }
+            runOnUiThread { if(!destroyed) {
+                if(uris.size>1 || failures.isNotEmpty()) sheet("Import results","$completed of ${uris.size} packages validated and installed.\n${failures.joinToString("\n")}\nExisting versions of failed packages were preserved.")
+                else Toast.makeText(this,"Package validated and installed",Toast.LENGTH_LONG).show()
+            } }
         }
     }
     fun home() {

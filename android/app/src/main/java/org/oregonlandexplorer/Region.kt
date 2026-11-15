@@ -26,8 +26,17 @@ class Region(private val context: Context) {
         packages=store.installed()
         previousPackageIds=packages.filter { store.hasPrevious(it.id) }.map { it.id }.toSet()
         val active=packages.filter { it.enabled }
-        bases=active.filter { it.kind=="vector" }
-        base=active.firstOrNull { it.kind=="vector" } ?: error("Enable an installed vector basemap")
+        val vectors=active.filter { it.kind=="vector" }
+        // A county archive supersedes covered corridor rendering, while leaving
+        // installed data and enable settings intact for rollback/removal.
+        bases=vectors.filter { candidate -> vectors.none { other ->
+            if(other.id==candidate.id) false else {
+                val b=candidate.manifest.getJSONArray("bbox");val o=other.manifest.getJSONArray("bbox")
+                val covers=o.getDouble(0)<=b.getDouble(0) && o.getDouble(1)<=b.getDouble(1) && o.getDouble(2)>=b.getDouble(2) && o.getDouble(3)>=b.getDouble(3)
+                covers && (o.toString()!=b.toString() || other.id<candidate.id)
+            }
+        } }
+        base=bases.firstOrNull() ?: error("Enable an installed vector basemap")
         parcelPackages=active.filter { it.kind in listOf("parcels","legacy") }
         for(pack in active) {
             val names=when(pack.kind) {
