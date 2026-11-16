@@ -4,6 +4,11 @@ on:
     branches: [feat/complete-private-delivery]
     paths: ['.github/workflows/delivery-android.yml']
   workflow_dispatch:
+    inputs:
+      runtime_only:
+        description: Rebuild private acceptance runner after instrumentation-only changes; production Android must match the regression-tested commit
+        type: boolean
+        default: false
 permissions: {contents: read, actions: read}
 jobs:
   build:
@@ -11,6 +16,10 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - name: Keep runtime-only builds on the regression-tested production Android sources
+        if: inputs.runtime_only
+        run: git diff --exit-code 2445dab0acd19a3d91921a6dbf229ebbd8cace56 HEAD -- android/app/src/main android/app/build.gradle.kts
       - uses: actions/setup-python@v5
         with: {python-version: '3.12'}
       - run: python -m pip install -r pipeline/requirements.txt
@@ -50,6 +59,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
       - name: Existing owner/GPS/aerial/picker and database regression tests
+        if: ${{ !inputs.runtime_only }}
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35

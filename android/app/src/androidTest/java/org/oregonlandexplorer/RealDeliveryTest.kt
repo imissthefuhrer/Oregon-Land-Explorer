@@ -18,6 +18,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Test
+import org.junit.After
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
 import java.io.File
@@ -31,6 +32,12 @@ class RealDeliveryTest {
     private val inputs=File(context.filesDir,"private-input")
     private val mode=InstrumentationRegistry.getArguments().getString("mode") ?: "missing"
     private val targets by lazy { JSONObject(File(inputs,"fixtures.json").readText()).getJSONArray("selection_targets") }
+    @After fun captureSystemUi() {
+        device.executeShellCommand("screencap -p /sdcard/Download/private-evidence/$mode-final-ui.png")
+        val out=java.io.ByteArrayOutputStream();device.dumpWindowHierarchy(out)
+        save("$mode-final-ui.xml",out.toString("UTF-8"))
+    }
+    private fun appClick(text: String) { androidx.test.espresso.Espresso.onView(androidx.test.espresso.matcher.ViewMatchers.withText(text)).perform(androidx.test.espresso.action.ViewActions.click()) }
     private fun waitReady(s: ActivityScenario<MainActivity>,condition: (MainActivity)->Boolean = { true }) {
         val end=SystemClock.elapsedRealtime()+180000;var ready=false
         while(!ready && SystemClock.elapsedRealtime()<end) {s.onActivity { ready=it.ready && condition(it) };Thread.sleep(200)}
@@ -64,7 +71,7 @@ class RealDeliveryTest {
         fail("Required system/app control unavailable")
     }
     private fun chooseDownload(s: ActivityScenario<MainActivity>,name: String,county: Boolean) {
-        clickText("Region");clickText(if(county) "Import complete county ZIP" else "Import .olepack from Downloads")
+        appClick("Region");appClick(if(county) "Import complete county ZIP" else "Import .olepack from Downloads")
         assertTrue("Android Files picker unavailable",device.wait(Until.hasObject(By.pkg("com.google.android.documentsui")),10000) || device.wait(Until.hasObject(By.pkg("com.android.documentsui")),10000))
         if(!device.wait(Until.hasObject(By.text(name)),3000)) {
             device.findObject(By.desc("Show roots"))?.click();clickText("Downloads")
@@ -182,7 +189,7 @@ class RealDeliveryTest {
                 for(p in installed.filter { it.manifest.optString("source_namespace")=="marion-open" }) assertTrue("County geometry changed during owner delivery",old.getJSONObject(p.id).toString()==p.manifest.getJSONObject("sha256").toString())
                 assertFalse("Disabled county setting changed without consent",installed.first { it.id==prefs.getString("disabled_county",null) }.enabled)
                 assertFalse(installed.first { it.id=="gervais-original-parcels" }.enabled)
-                clickText("Region");clickText("Enable all county maps")
+                appClick("Region");appClick("Enable all county maps")
                 waitReady(s) { it.region!!.parcelPackages.count { p -> p.manifest.optString("source_namespace")=="marion-open" }==16 }
             }
             assertEquals(1,context.contentResolver.delete(uri,null,null))
