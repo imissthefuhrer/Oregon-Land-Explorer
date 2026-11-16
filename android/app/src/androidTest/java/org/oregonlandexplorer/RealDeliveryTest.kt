@@ -38,6 +38,7 @@ class RealDeliveryTest {
         save("$mode-final-ui.xml",out.toString("UTF-8"))
     }
     private fun appClick(text: String) { androidx.test.espresso.Espresso.onView(androidx.test.espresso.matcher.ViewMatchers.withText(text)).perform(androidx.test.espresso.action.ViewActions.click()) }
+    private fun menuClick(text: String) { androidx.test.espresso.Espresso.onData(org.hamcrest.Matchers.equalTo(text)).perform(androidx.test.espresso.action.ViewActions.click()) }
     private fun waitReady(s: ActivityScenario<MainActivity>,condition: (MainActivity)->Boolean = { true }) {
         val end=SystemClock.elapsedRealtime()+180000;var ready=false
         while(!ready && SystemClock.elapsedRealtime()<end) {s.onActivity { ready=it.ready && condition(it) };Thread.sleep(200)}
@@ -63,26 +64,35 @@ class RealDeliveryTest {
         return uri
     }
     private fun clickText(text: String) {
+        val config=androidx.test.uiautomator.Configurator.getInstance();val previous=config.waitForIdleTimeout
+        config.setWaitForIdleTimeout(0)
+        try {
         val end=SystemClock.elapsedRealtime()+20000
         while(SystemClock.elapsedRealtime()<end) {
             try {val node=device.findObject(UiSelector().text(text));if(node.waitForExists(500) && node.click()) return} catch(_: androidx.test.uiautomator.UiObjectNotFoundException) { }
             Thread.sleep(200)
         }
         fail("Required system/app control unavailable")
+        } finally {config.setWaitForIdleTimeout(previous)}
     }
     private fun chooseDownload(s: ActivityScenario<MainActivity>,name: String,county: Boolean) {
-        appClick("Region");appClick(if(county) "Import complete county ZIP" else "Import .olepack from Downloads")
+        appClick("Region");menuClick(if(county) "Import complete county ZIP" else "Import .olepack from Downloads")
         assertTrue("Android Files picker unavailable",device.wait(Until.hasObject(By.pkg("com.google.android.documentsui")),10000) || device.wait(Until.hasObject(By.pkg("com.android.documentsui")),10000))
         if(!device.wait(Until.hasObject(By.text(name)),3000)) {
             device.findObject(By.desc("Show roots"))?.click();clickText("Downloads")
         }
         assertTrue("Completed browser-style download missing from Files",device.wait(Until.hasObject(By.text(name)),10000))
-        clickText(name)
+        if(name.endsWith(".zip")) {
+            // Select the ZIP as a document, not its browsable archive contents.
+            device.findObject(UiSelector().text(name)).longClick()
+            val open=device.wait(Until.findObject(By.text("Open")),2000) ?: device.findObject(By.text("OPEN")) ?: device.findObject(By.desc("Open"))
+            if(open!=null) open.click() else clickText(name)
+        } else clickText(name)
         // Some DocumentsUI releases open ZIP navigation on tap. Select the archive
         // itself if still in the picker rather than substituting a non-ZIP MIME type.
         Thread.sleep(1000)
         if(device.hasObject(By.pkg("com.google.android.documentsui")) || device.hasObject(By.pkg("com.android.documentsui"))) {
-            if(!device.hasObject(By.text(name))) device.pressBack()
+            device.pressBack()
             val row=device.findObject(UiSelector().text(name))
             if(row.waitForExists(3000)) {row.longClick();device.findObject(By.text("Open"))?.click();device.findObject(By.text("OPEN"))?.click()}
         }
@@ -189,7 +199,7 @@ class RealDeliveryTest {
                 for(p in installed.filter { it.manifest.optString("source_namespace")=="marion-open" }) assertTrue("County geometry changed during owner delivery",old.getJSONObject(p.id).toString()==p.manifest.getJSONObject("sha256").toString())
                 assertFalse("Disabled county setting changed without consent",installed.first { it.id==prefs.getString("disabled_county",null) }.enabled)
                 assertFalse(installed.first { it.id=="gervais-original-parcels" }.enabled)
-                appClick("Region");appClick("Enable all county maps")
+                appClick("Region");menuClick("Enable all county maps")
                 waitReady(s) { it.region!!.parcelPackages.count { p -> p.manifest.optString("source_namespace")=="marion-open" }==16 }
             }
             assertEquals(1,context.contentResolver.delete(uri,null,null))
