@@ -33,15 +33,26 @@ class RealDeliveryTest {
     private val mode=InstrumentationRegistry.getArguments().getString("mode") ?: "missing"
     private val targets by lazy { JSONObject(File(inputs,"fixtures.json").readText()).getJSONArray("selection_targets") }
     @After fun captureSystemUi() {
-        device.executeShellCommand("screencap -p /sdcard/Download/private-evidence/$mode-final-ui.png")
+        capture("final-ui")
+    }
+    private fun capture(label: String) {
+        device.executeShellCommand("screencap -p /sdcard/Download/private-evidence/$mode-$label.png")
         val out=java.io.ByteArrayOutputStream();device.dumpWindowHierarchy(out)
-        save("$mode-final-ui.xml",out.toString("UTF-8"))
+        save("$mode-$label.xml",out.toString("UTF-8"))
     }
     private fun appClick(text: String) { androidx.test.espresso.Espresso.onView(androidx.test.espresso.matcher.ViewMatchers.withText(text)).perform(androidx.test.espresso.action.ViewActions.click()) }
     private fun menuClick(text: String) { androidx.test.espresso.Espresso.onData(org.hamcrest.Matchers.equalTo(text)).perform(androidx.test.espresso.action.ViewActions.click()) }
     private fun waitReady(s: ActivityScenario<MainActivity>,condition: (MainActivity)->Boolean = { true }) {
-        val end=SystemClock.elapsedRealtime()+180000;var ready=false
-        while(!ready && SystemClock.elapsedRealtime()<end) {s.onActivity { ready=it.ready && condition(it) };Thread.sleep(200)}
+        val start=SystemClock.elapsedRealtime();val end=start+600000;var ready=false;var minute=0L
+        while(!ready && SystemClock.elapsedRealtime()<end) {
+            if(device.hasObject(By.text("Quickstep isn't responding"))) device.findObject(By.res("android","aerr_close"))?.click()
+            s.onActivity { ready=it.ready && condition(it) }
+            if(!ready && device.hasObject(By.text("Import results")) && device.hasObject(By.textContains("0 of 1 files imported"))) {capture("import-error");fail("ZIP import failed; private screen evidence preserves the actual error")}
+            val elapsed=(SystemClock.elapsedRealtime()-start)/60000
+            if(!ready && elapsed>minute) {minute=elapsed;capture("waiting-$minute")}
+            Thread.sleep(200)
+        }
+        if(!ready) capture("not-ready")
         assertTrue("Map/import did not become ready ($mode)",ready)
     }
     private fun save(name: String,text: String) {
@@ -85,17 +96,13 @@ class RealDeliveryTest {
         if(name.endsWith(".zip")) {
             // Select the ZIP as a document, not its browsable archive contents.
             device.findObject(UiSelector().text(name)).longClick()
-            val open=device.wait(Until.findObject(By.text("Open")),2000) ?: device.findObject(By.text("OPEN")) ?: device.findObject(By.desc("Open"))
-            if(open!=null) open.click() else clickText(name)
+            capture("picker-zip-selected")
+            val open=device.wait(Until.findObject(By.text("Open")),5000) ?: device.findObject(By.text("OPEN")) ?: device.findObject(By.desc("Open"))
+                ?: device.findObject(By.res("com.google.android.documentsui","action_menu_select")) ?: device.findObject(By.res("com.android.documentsui","action_menu_select"))
+            assertNotNull("System picker did not offer archive selection; private screenshot captured",open)
+            open!!.click()
         } else clickText(name)
-        // Some DocumentsUI releases open ZIP navigation on tap. Select the archive
-        // itself if still in the picker rather than substituting a non-ZIP MIME type.
-        Thread.sleep(1000)
-        if(device.hasObject(By.pkg("com.google.android.documentsui")) || device.hasObject(By.pkg("com.android.documentsui"))) {
-            device.pressBack()
-            val row=device.findObject(UiSelector().text(name))
-            if(row.waitForExists(3000)) {row.longClick();device.findObject(By.text("Open"))?.click();device.findObject(By.text("OPEN"))?.click()}
-        }
+        assertTrue("System picker did not hand the selected file to the app",device.wait(Until.hasObject(By.pkg(context.packageName)),30000))
     }
     private fun expected(lot: String,account: String): String=ParcelDatabase.open(File(inputs,"reference.sqlite")).use { db ->
         db.rawQuery("SELECT owner FROM owners_reference WHERE county=? AND taxlot=? AND taxacct=?",arrayOf("41047",lot,account)).use { c ->
