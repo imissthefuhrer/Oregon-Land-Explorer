@@ -1,5 +1,10 @@
 # Private offline Marion County owners
 
+**Current delivery:** the existing real dataset has now passed private fresh/upgrade
+Android acceptance. Use the [complete county ZIP and real-data results](complete-county-import.md).
+The v0.5 workflow and acquisition findings below are historical; they do not
+require re-extracting records already supplied to the private delivery pipeline.
+
 Owner identification is the purpose of this work. The public v0.4 county geometry
 contains 115,870 parcels but does **not** supply countywide names. This change adds
 a private attribute package; it does not claim to have acquired that missing dataset.

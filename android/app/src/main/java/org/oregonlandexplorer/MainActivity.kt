@@ -253,10 +253,10 @@ class MainActivity : AppCompatActivity(), LocationListener {
             val m=p.manifest
             "${if(p.enabled) "Enabled" else "Disabled"}: ${m.getString("name")}\n${p.kind} · revision ${m.optInt("revision",1)} · ${"%.2f".format(p.payloadBytes/1048576.0)} MiB\nBounds W,S,E,N: ${m.getJSONArray("bbox")}\nExtracted: ${m.optString("extracted_at")}\n${m.getString("attribution")}"
         }
-        sheet("Installed map data", "$records\n\n${installed.manifest.getInt("parcel_count")} installed parcel records (overlap resolved on selection).\n\n© OpenStreetMap contributors. Open data under ODbL 1.0: https://www.openstreetmap.org/copyright · https://opendatacommons.org/licenses/odbl/1-0/\nOutdoor data: bulk OpenStreetMap, compiled with Tilemaker. The bulk provider is listed per package. Fonts: Noto Sans (SIL OFL 1.1). MapLibre Native (BSD-2-Clause).\n\nRoads are light; trails are rust dashes; forest tracks are brown dashes; mapped access=no/private is overprinted purple. These tags are not proof of access. Confirm restrictions and current closures locally.\n\nCounty public boundary source (owner names withheld): https://services1.arcgis.com/sYGZnQPdJ0azuLyn/arcgis/rest/services/Parcels_OpenDataView/FeatureServer/0\nOriginal owner-enabled regional source: https://services3.arcgis.com/SXXjryU22GsO8OEC/arcgis/rest/services/Parcels/FeatureServer/0\nApproximate assessor-derived boundaries, not surveys; source vintage and completeness are not independently verified. Ownership and legal public access remain Unknown.\n\nAll map data, labels and fonts are local. No internet permission. Vector geometry is stored through zoom 15 and magnified above it; aerial through zoom 17. Home coverage must be checked privately using GPS.")
+        sheet("Installed map data", "App v${packageManager.getPackageInfo(packageName,0).versionName}\n\n${countySummary(installed.packages)}\n\n$records\n\n${installed.manifest.getInt("parcel_count")} installed parcel records (overlap resolved on selection).\n\n© OpenStreetMap contributors. Open data under ODbL 1.0: https://www.openstreetmap.org/copyright · https://opendatacommons.org/licenses/odbl/1-0/\nOutdoor data: bulk OpenStreetMap, compiled with Tilemaker. The bulk provider is listed per package. Fonts: Noto Sans (SIL OFL 1.1). MapLibre Native (BSD-2-Clause).\n\nRoads are light; trails are rust dashes; forest tracks are brown dashes; mapped access=no/private is overprinted purple. These tags are not proof of access. Confirm restrictions and current closures locally.\n\nCounty public boundary source (owner names withheld): https://services1.arcgis.com/sYGZnQPdJ0azuLyn/arcgis/rest/services/Parcels_OpenDataView/FeatureServer/0\nOriginal owner-enabled regional source: https://services3.arcgis.com/SXXjryU22GsO8OEC/arcgis/rest/services/Parcels/FeatureServer/0\nApproximate assessor-derived boundaries, not surveys. Owner records are displayed from installed sources; download time does not establish ownership freshness. Legal public access remains unknown.\n\nAll map data, labels and fonts are local. No internet permission. Vector geometry is stored through zoom 15 and magnified above it; aerial through zoom 17. Home coverage must be checked privately using GPS.")
     }
     private fun showRegions() {
-        val items=arrayOf("Return to downloaded basemap", "Gervais countryside", "St. Louis Ponds", "Willamette Mission State Park", "Silver Falls State Park", "Import .olepack from Downloads", "Manage installed packages", if(aerialVisible) "Use outdoor basemap" else "Show installed optional aerial", "County coverage", "Salem", "Gates", "Detroit")
+        val items=arrayOf("Return to downloaded basemap", "Gervais countryside", "St. Louis Ponds", "Willamette Mission State Park", "Silver Falls State Park", "Import .olepack from Downloads", "Manage installed packages", if(aerialVisible) "Use outdoor basemap" else "Show installed optional aerial", "County coverage", "Salem", "Gates", "Detroit", "Import complete county ZIP", "Enable all county maps")
         androidx.appcompat.app.AlertDialog.Builder(this).setTitle("Offline regions").setItems(items) { _, choice ->
             when(choice) {
                 0 -> home()
@@ -275,6 +275,8 @@ class MainActivity : AppCompatActivity(), LocationListener {
                 9 -> go(44.942,-123.035,15.0)
                 10 -> go(44.755,-122.416,15.0)
                 11 -> go(44.735,-122.151,15.0)
+                12 -> if(!importing) importer.launch(arrayOf("*/*"))
+                13 -> reloadPackages { region?.store?.enableCountyMaps() }
             }
         }.show()
     }
@@ -289,8 +291,16 @@ class MainActivity : AppCompatActivity(), LocationListener {
             "$state: ${entry.getString("name")}\n${entry.getInt("parcel_count")} records · ${entry.getJSONArray("partition_bbox")}"
         }
         val base=installed.packages.firstOrNull { it.id=="marion-outdoors" }
-        val owners=installed.packages.filter { it.kind=="owners" }.joinToString("\n") { "${if(it.enabled) "Enabled" else "Disabled"}: ${it.manifest.getString("name")} · ${it.manifest.getInt("owner_count")} validated names · as of ${it.manifest.getString("source_data_as_of")}" }.ifEmpty { "Private county ownership dataset not installed" }
-        sheet("County coverage","County basemap: ${if(base==null) "Missing" else if(base.enabled) "Installed, enabled" else "Installed, disabled"}\n\nOwnership information:\n$owners\n\n${lines.joinToString("\n\n")}\n\nPublic boundary packages exclude owner names. Import a separate authorized private ownership .olepack to identify owners offline. Missing data does not mean land has no owner. Existing owner-enabled packages are retained.\n\nOptional: original Gervais OSIP 2024 aerial. Import browser downloads using Region > Import .olepack from Downloads. Long-press a file in Android Files to select multiple packages. Each file is validated and installed independently.")
+        val owners=installed.packages.filter { it.kind=="owners" }.joinToString("\n") { "${if(it.enabled) "Enabled" else "Disabled"}: ${it.manifest.getString("name")} · ${it.manifest.getInt("owner_count")} matched records · ${OwnerDatabase.dateDescription(it.manifest)}" }.ifEmpty { "Private county ownership dataset not installed" }
+        sheet("County coverage","${countySummary(installed.packages)}\n\nCounty basemap: ${if(base==null) "Missing" else if(base.enabled) "Installed, enabled" else "Installed, disabled"}\n\nOwnership information:\n$owners\n\n${lines.joinToString("\n\n")}\n\nOwnership needs the county parcel regions as well as an owner file. Missing data does not mean land has no owner. Import the complete county ZIP to install all required maps at once. Existing regions and enable/disable settings are retained; Region > Enable all county maps activates the installed county coverage.\n\nOptional: original Gervais OSIP 2024 aerial. Individual .olepack downloads remain supported.")
+    }
+    private fun countySummary(packs: List<MapPackage>): String {
+        val parcels=packs.filter { it.manifest.optString("source_namespace")=="marion-open" && it.kind=="parcels" }
+        val owners=packs.filter { it.kind=="owners" && it.enabled }
+        val base=packs.any { it.id=="marion-outdoors" && it.enabled }
+        val count=owners.maxOfOrNull { it.manifest.getInt("owner_count") } ?: 0
+        return "County parcel regions: ${parcels.size}/16 installed · ${parcels.count { it.enabled }}/16 enabled\nCounty basemap: ${if(base) "ready" else "missing or disabled"}\nOwner records enabled: $count\n"+
+            if(parcels.count { it.enabled }==16 && base && count==115870) "County offline ownership coverage ready" else "County coverage incomplete. Owner names require the matching parcel regions; an owner file alone cannot supply their boundaries."
     }
     private fun go(lat: Double,lon: Double,zoom: Double) { map?.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(lat,lon),zoom)) }
     private fun managePackages() {
@@ -334,15 +344,18 @@ class MainActivity : AppCompatActivity(), LocationListener {
     private fun importDocuments(uris: List<Uri>) {
         reloadPackages {
             val store=region?.store ?: PackageStore(this)
-            var completed=0;val failures=mutableListOf<String>()
+            var completed=0;var packageCount=0;val failures=mutableListOf<String>()
             for(uri in uris) {
                 try {
-                    contentResolver.openInputStream(uri)?.use { store.importPackage(it) } ?: error("Cannot open selected document")
+                    contentResolver.openInputStream(uri)?.use { input -> packageCount+=store.importDownload(input) { message -> runOnUiThread { if(!destroyed) status.text=message } } } ?: error("Cannot open selected document")
                     completed++
-                } catch(e: Exception) { failures.add("${uri.lastPathSegment}: ${e.message}") }
+                } catch(e: SecurityException) { failures.add("Android denied file access. Download the ZIP fully and choose it again from Files > Downloads.") }
+                catch(e: Exception) { failures.add("${uri.lastPathSegment}: ${e.message}") }
             }
+            val summary=countySummary(store.installed())
+            val hasOwners=store.installed().any { it.kind=="owners" }
             runOnUiThread { if(!destroyed) {
-                if(uris.size>1 || failures.isNotEmpty()) sheet("Import results","$completed of ${uris.size} packages validated and installed.\n${failures.joinToString("\n")}\nExisting versions of failed packages were preserved.")
+                if(uris.size>1 || packageCount>1 || failures.isNotEmpty() || hasOwners) sheet("Import results","$completed of ${uris.size} files imported · $packageCount map packages installed.\n$summary\n${failures.joinToString("\n")}\nA failed complete county ZIP leaves the previous installation intact. Region > Enable all county maps activates installed regions.")
                 else Toast.makeText(this,"Package validated and installed",Toast.LENGTH_LONG).show()
             } }
         }

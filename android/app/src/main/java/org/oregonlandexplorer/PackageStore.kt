@@ -37,7 +37,8 @@ class PackageStore(private val context: Context) {
             context.assets.open("packs/$name").use { importPackage(it,true) }
         }
     }
-    fun importPackage(input: InputStream, bundled: Boolean = false): MapPackage = synchronized(LOCK) {
+    fun importPackage(input: InputStream, bundled: Boolean = false): MapPackage = synchronized(LOCK) { importVersion(input,bundled) }
+    private fun importVersion(input: InputStream,bundled: Boolean=false, working: JSONObject?=null): MapPackage {
         val stage=File(root,".staging-${UUID.randomUUID()}").apply { mkdir() }
         try {
             val seen=HashSet<String>(); var total=0L
@@ -66,7 +67,7 @@ class PackageStore(private val context: Context) {
             val id=m.getString("id")
             val revision=m.optInt("revision",1)
             val digest=sha(File(stage,"manifest.json"))
-            val r=registry();val previous=r.optJSONObject(id)
+            val r=working ?: registry();val previous=r.optJSONObject(id)
             if(previous!=null) {
                 val old=MapPackage(File(root,previous.getString("current")),true)
                 if(sha(File(old.directory,"manifest.json"))==digest) return old
@@ -78,8 +79,17 @@ class PackageStore(private val context: Context) {
                 require(old.manifest.optString("identity_strategy")==m.optString("identity_strategy") && old.manifest.optString("source_namespace")==m.optString("source_namespace")) { "Package identity namespace changed; import a separately named region instead" }
                 val sourceFloor=previous.optString("max_source_updated_at",old.manifest.optString("source_updated_at",""))
                 if(sourceFloor.isNotEmpty() && sourceFloor!="null") {
-                    require(!m.isNull("source_updated_at") && !java.time.Instant.parse(m.getString("source_updated_at")).isBefore(java.time.Instant.parse(sourceFloor))) { "Update contains an older source snapshot; installed data was preserved" }
+                    val correctingProvenance=old.kind=="owners" && !OwnerDatabase.observed(old.manifest) && OwnerDatabase.observed(m)
+                    if(correctingProvenance) {
+                        val oldSource=JSONObject(File(old.directory,"source-metadata.json").readText())
+                        val newSource=JSONObject(File(stage,"source-metadata.json").readText())
+                        require((old.manifest.optBoolean("test_data") && !m.optBoolean("test_data")) ||
+                            (oldSource.optString("input_sha256").matches(Regex("[a-f0-9]{64}")) && oldSource.getString("input_sha256")==newSource.getString("input_sha256"))) { "Provenance correction must preserve the original input records" }
+                        require(!OwnerDatabase.orderingDate(m).isBefore(java.time.Instant.parse(sourceFloor))) { "Ownership download predates installed data" }
+                    } else require(!m.isNull("source_updated_at") && !java.time.Instant.parse(m.getString("source_updated_at")).isBefore(java.time.Instant.parse(sourceFloor))) { "Update contains an older source snapshot; installed data was preserved" }
                 }
+                val observedFloor=previous.optString("max_owner_retrieved_utc","")
+                if(observedFloor.isNotEmpty()) require(OwnerDatabase.observed(m) && !OwnerDatabase.orderingDate(m).isBefore(java.time.Instant.parse(observedFloor))) { "Update contains older ownership observations; installed data was preserved" }
                 val newest=java.time.Instant.parse(previous.optString("max_extracted_at",old.manifest.getString("extracted_at")))
                 require(!java.time.Instant.parse(m.getString("extracted_at")).isBefore(newest)) { "Update contains older source data; installed data was preserved" }
             }
@@ -93,10 +103,57 @@ class PackageStore(private val context: Context) {
             record.put("max_revision",maxOf(revision,previous?.optInt("max_revision",revision) ?: revision))
             record.put("max_extracted_at",m.getString("extracted_at"))
             if(!m.isNull("source_updated_at")) record.put("max_source_updated_at",m.getString("source_updated_at"))
+            if(OwnerDatabase.observed(m)) record.put("max_owner_retrieved_utc",m.getString("retrieved_utc"))
             previous?.let { record.put("previous",it.getString("current")) }
-            r.put(id,record);commit(r)
+            r.put(id,record);if(working==null) commit(r)
             return MapPackage(destination,record.getBoolean("enabled"))
         } finally { stage.deleteRecursively() }
+    }
+    /** One AtomicFile commit after every nested package validates. Interrupted staging
+     * leaves the old registry intact; immutable completed files can be reused on retry. */
+    fun importDownload(input: InputStream,progress: (String)->Unit = {}): Int {
+        val incoming=File(context.cacheDir,"map-download-${UUID.randomUUID()}.zip")
+        try {
+            input.use { source -> incoming.outputStream().use { out ->
+                val buffer=ByteArray(65536);var total=0L
+                while(true) {val n=source.read(buffer);if(n<0) break;total+=n;require(total<=MAX_TOTAL) { "Download exceeds the 512 MiB safety limit" };out.write(buffer,0,n)}
+            } }
+            java.util.zip.ZipFile(incoming).use { zip ->
+                if(zip.getEntry("bundle.json")==null) {
+                    require(zip.getEntry("manifest.json")!=null) { "This is a download ZIP, not a map package. Choose the complete Marion County ZIP supplied with v0.6, or extract the .olepack inside your download." }
+                    progress("Validating map package…")
+                    incoming.inputStream().use { importPackage(it) };return 1
+                }
+            }
+            return synchronized(LOCK) {
+                CountyBundle.open(context,incoming,progress).use { bundle ->
+                    val working=JSONObject(registry().toString())
+                    val before=root.listFiles()?.map { it.name }?.toSet() ?: emptySet()
+                    try {
+                        for((i,file) in bundle.packages.withIndex()) {
+                            progress("Installing ${i+1}/${bundle.packages.size}: ${file.name.removeSuffix(".olepack")}")
+                            file.inputStream().use { importVersion(it,false,working) }
+                        }
+                        bundle.validateInstalled(working,root)
+                        commit(working)
+                    } catch(e: Exception) {
+                        // Only this transaction's uncommitted directories are disposable.
+                        for(dir in root.listFiles() ?: emptyArray()) if(dir.isDirectory && dir.name !in before) dir.deleteRecursively()
+                        throw e
+                    }
+                    progress("18/18 county packages installed")
+                    bundle.packages.size
+                }
+            }
+        } finally { incoming.delete() }
+    }
+    fun enableCountyMaps(): Unit = synchronized(LOCK) {
+        val r=registry()
+        for(id in r.keys().asSequence().toList()) {
+            val record=r.getJSONObject(id);val pack=MapPackage(File(root,record.getString("current")),true)
+            if(pack.id=="marion-outdoors" || pack.manifest.optString("source_namespace") in listOf("marion-open","marion-owner-overlay")) record.put("enabled",true)
+        }
+        commit(r)
     }
     fun setEnabled(id: String, enabled: Boolean): Unit = synchronized(LOCK) {
         val r=registry();val record=r.getJSONObject(id)
